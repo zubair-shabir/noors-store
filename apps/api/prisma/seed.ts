@@ -2,9 +2,13 @@
  * Development seed: the four categories and placeholder products from the design step,
  * each with Size (and some with Colour) variants. Safe to re-run: it replaces seeded
  * products by slug. Run with `pnpm db:seed`.
+ *
+ * Also creates a development owner account (owner@noors.local / noors-dev-password) and the
+ * home page banners, both only when missing so dashboard edits survive a re-seed.
  */
 import 'dotenv/config';
 import { createPrisma } from '../src/lib/prisma.js';
+import { hashPassword } from '../src/lib/password.js';
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is not set');
@@ -204,10 +208,52 @@ async function main() {
     update: {},
   });
 
+  if (process.env.NODE_ENV !== 'production') {
+    await prisma.adminUser.upsert({
+      where: { email: 'owner@noors.local' },
+      create: {
+        email: 'owner@noors.local',
+        name: 'Store Owner',
+        role: 'OWNER',
+        passwordHash: await hashPassword('noors-dev-password'),
+      },
+      update: {},
+    });
+  }
+
+  if ((await prisma.banner.count()) === 0) {
+    await prisma.banner.createMany({
+      data: [
+        { placement: 'ANNOUNCEMENT', title: 'Winter sale 50% off use coupon code: WINTER50' },
+        ...[1, 2, 3, 4].map((n, i) => ({
+          placement: 'HERO' as const,
+          title: i === 0 ? 'Clothing beyond time.' : null,
+          subtitle: i === 0 ? 'Wear your story, every single drop.' : null,
+          imageUrl: img(`lookbook-${n}`),
+          position: i,
+        })),
+        ...[
+          ['Jackets', 'jackets', 'lookbook-1'],
+          ['Hoodies', 'hoodies', 'kashmir-heritage-hoodie-1'],
+          ['Overshirts', 'overshirts', 'lookbook-4'],
+          ['Latest Drip', 'latest', 'lookbook-2'],
+        ].map(([title, slug, image], i) => ({
+          placement: 'CATEGORY_TILE' as const,
+          title,
+          imageUrl: img(image!),
+          linkUrl: `/shop/${slug}`,
+          position: i,
+        })),
+      ],
+    });
+  }
+
   const counts = {
     categories: await prisma.category.count(),
     products: await prisma.product.count(),
     variants: await prisma.variant.count(),
+    banners: await prisma.banner.count(),
+    admins: await prisma.adminUser.count(),
   };
   console.log('Seeded', counts);
 }

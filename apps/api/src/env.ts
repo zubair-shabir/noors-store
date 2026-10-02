@@ -13,6 +13,12 @@ const envSchema = z.object({
         .map((o) => o.trim())
         .filter(Boolean),
     ),
+  /** cloudinary://key:secret@cloud_name. When unset, uploads are saved to UPLOADS_DIR. */
+  CLOUDINARY_URL: z
+    .string()
+    .optional()
+    .transform((v) => v || undefined),
+  UPLOADS_DIR: z.string().default('uploads'),
 });
 
 export type Env = z.infer<typeof envSchema>;
