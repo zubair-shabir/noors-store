@@ -21,6 +21,7 @@ pnpm db:up                                # start Postgres + Redis in Docker
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 pnpm db:migrate                           # apply Prisma migrations
+pnpm db:seed                              # load sample categories and products
 pnpm dev                                  # web on :3000, API on :4000
 ```
 
@@ -36,8 +37,11 @@ Check the API: <http://localhost:4000/api/v1/health>
 | `pnpm format`                                | Format with Prettier                                                       |
 | `pnpm db:up` / `pnpm db:down`                | Start or stop Postgres and Redis                                           |
 | `pnpm db:migrate`                            | Create and apply a migration after editing `apps/api/prisma/schema.prisma` |
+| `pnpm db:seed`                               | Load sample categories, products and variants (safe to re-run)             |
 | `pnpm db:studio`                             | Browse the database in Prisma Studio                                       |
 
 ## Database
 
-The schema lives in `apps/api/prisma/schema.prisma`. Every change becomes a plain SQL migration in `apps/api/prisma/migrations`, which is committed and can be read or edited before it runs.
+The schema lives in `apps/api/prisma/schema.prisma`. Every change becomes a plain SQL migration in `apps/api/prisma/migrations`, which is committed and can be read or edited before it runs. Rules Prisma can't express (stock never below zero, reserved never above stock, positive prices and quantities) are hand-written `CHECK` constraints at the end of the migration.
+
+API tests run against a real Postgres: start it with `pnpm db:up` and apply migrations first. The API endpoints are listed in [apps/api/README.md](apps/api/README.md).

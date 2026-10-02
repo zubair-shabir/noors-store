@@ -16,7 +16,8 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @noors/api prisma:migrate",
-    "db:studio": "pnpm --filter @noors/api prisma:studio"
+    "db:studio": "pnpm --filter @noors/api prisma:studio",
+    "db:seed": "pnpm --filter @noors/api db:seed"
   },
   "devDependencies": {
     "prettier": "^3.6.2",

@@ -6,12 +6,7 @@ import { createPrisma } from './lib/prisma.js';
 const env = loadEnv();
 const prisma = createPrisma(env.DATABASE_URL);
 
-const app = createApp({
-  corsOrigins: env.CORS_ORIGINS,
-  pingDatabase: async () => {
-    await prisma.$queryRaw`SELECT 1`;
-  },
-});
+const app = createApp({ corsOrigins: env.CORS_ORIGINS, prisma });
 
 const server = app.listen(env.PORT, () => {
   logger.info(`API listening on http://localhost:${env.PORT}`);
