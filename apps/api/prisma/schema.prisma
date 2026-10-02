@@ -1,0 +1,22 @@
+// Database schema for the Noor's store.
+// Every change here becomes a versioned SQL migration in prisma/migrations
+// (run `pnpm db:migrate`), so the schema stays fully under our control.
+// The catalogue, order and customer tables arrive in Step 3 of the plan.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Key/value store settings (shipping charges, COD toggle, return window, ...).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
