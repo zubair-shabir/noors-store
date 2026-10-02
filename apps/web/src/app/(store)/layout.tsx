@@ -4,6 +4,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Header } from '@/components/layout/Header';
 import { MenuDrawer } from '@/components/layout/MenuDrawer';
 import { SearchPanel } from '@/components/layout/SearchPanel';
+import { ShopSync } from '@/components/layout/ShopSync';
 import { CursorFollower } from '@/components/motion/CursorFollower';
 import { IntroLoader } from '@/components/motion/IntroLoader';
 import { SmoothScroll } from '@/components/motion/SmoothScroll';
@@ -31,6 +32,7 @@ export default async function StoreLayout({ children }: LayoutProps<'/'>) {
       <main>{children}</main>
       <Footer navLinks={navLinks} />
       <MenuDrawer navLinks={navLinks} />
+      <ShopSync />
       <CartDrawer />
       <SearchPanel />
       <CursorFollower />

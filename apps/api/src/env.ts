@@ -29,7 +29,11 @@ const envSchema = z
     RAZORPAY_WEBHOOK_SECRET: optional,
     /** Resend API key for sign-in codes. Without it, codes are written to the log (development). */
     RESEND_API_KEY: optional,
-    EMAIL_FROM: z.string().default("Noor's <orders@noors.in>"),
+    /** Sender for customer emails; the domain must be verified in Resend. */
+    EMAIL_FROM: z
+      .string()
+      .optional()
+      .transform((v) => v || "Noor's <orders@noors.in>"),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;

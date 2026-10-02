@@ -1,77 +1,107 @@
 'use client';
 
+import type { CartDto, CustomerDto } from '@noors/shared';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
-import type { Paise } from '@noors/shared';
+import { shopFetch } from './shop-api';
 
-export interface CartLine {
-  variantId: string;
-  slug: string;
-  name: string;
-  /** e.g. "M / Olive", or "One size". */
-  title: string;
-  image: string | null;
-  price: Paise;
-  quantity: number;
+interface ShopState {
+  /** Null until the first load finishes. */
+  cart: CartDto | null;
+  customer: CustomerDto | null;
+  /** True once the cart and the signed-in customer are known. */
+  loaded: boolean;
+  /** Fetches the cart and who is signed in. */
+  load: () => Promise<void>;
+  setCart: (cart: CartDto) => void;
+  setCustomer: (customer: CustomerDto | null) => void;
+  add: (variantId: string, quantity?: number) => Promise<CartDto>;
+  setQuantity: (itemId: string, quantity: number) => Promise<void>;
+  remove: (itemId: string) => Promise<void>;
+  applyCoupon: (code: string) => Promise<void>;
+  removeCoupon: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
-interface CartState {
-  lines: CartLine[];
-  add: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
-  setQuantity: (variantId: string, quantity: number) => void;
-  remove: (variantId: string) => void;
-  clear: () => void;
+/** Bags saved in the browser before carts moved to the server (Step 5). */
+const LEGACY_KEY = 'noors-cart';
+
+async function importLegacyCart(): Promise<boolean> {
+  let lines: { variantId: string; quantity: number }[] = [];
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (!raw) return false;
+    localStorage.removeItem(LEGACY_KEY);
+    lines = (JSON.parse(raw) as { state?: { lines?: typeof lines } }).state?.lines ?? [];
+  } catch {
+    return false;
+  }
+  for (const line of lines) {
+    await shopFetch('/cart/items', { method: 'POST', body: line }).catch(() => undefined);
+  }
+  return lines.length > 0;
 }
 
-/** Most of one variant a shopper can put in the cart. */
-export const MAX_LINE_QUANTITY = 10;
-
-// Guest cart kept in the browser; Step 6 moves it to the API, which re-prices every line.
-export const useCart = create<CartState>()(
-  persist(
-    (set) => ({
-      lines: [],
-      add: (line, quantity = 1) =>
-        set((state) => {
-          const existing = state.lines.find((l) => l.variantId === line.variantId);
-          if (existing) {
-            return {
-              lines: state.lines.map((l) =>
-                l.variantId === line.variantId
-                  ? { ...l, ...line, quantity: Math.min(MAX_LINE_QUANTITY, l.quantity + quantity) }
-                  : l,
-              ),
-            };
-          }
-          return {
-            lines: [...state.lines, { ...line, quantity: Math.min(MAX_LINE_QUANTITY, quantity) }],
-          };
+/** The shopper's bag and account, kept on the server and mirrored here. */
+export const useShop = create<ShopState>()((set, get) => ({
+  cart: null,
+  customer: null,
+  loaded: false,
+  load: async () => {
+    await importLegacyCart();
+    const [cart, me] = await Promise.all([
+      shopFetch<CartDto>('/cart'),
+      shopFetch<{ customer: CustomerDto | null }>('/me'),
+    ]);
+    set({ cart, customer: me.customer, loaded: true });
+  },
+  setCart: (cart) => set({ cart }),
+  setCustomer: (customer) => set({ customer }),
+  add: async (variantId, quantity = 1) => {
+    const cart = await shopFetch<CartDto>('/cart/items', {
+      method: 'POST',
+      body: { variantId, quantity },
+    });
+    set({ cart });
+    return cart;
+  },
+  setQuantity: async (itemId, quantity) => {
+    // Show the new quantity straight away; the server's answer replaces it.
+    const before = get().cart;
+    if (before) {
+      set({
+        cart: {
+          ...before,
+          items: before.items.map((i) => (i.id === itemId ? { ...i, quantity } : i)),
+        },
+      });
+    }
+    try {
+      set({
+        cart: await shopFetch<CartDto>(`/cart/items/${itemId}`, {
+          method: 'PATCH',
+          body: { quantity },
         }),
-      setQuantity: (variantId, quantity) =>
-        set((state) => ({
-          lines:
-            quantity <= 0
-              ? state.lines.filter((l) => l.variantId !== variantId)
-              : state.lines.map((l) =>
-                  l.variantId === variantId
-                    ? { ...l, quantity: Math.min(MAX_LINE_QUANTITY, quantity) }
-                    : l,
-                ),
-        })),
-      remove: (variantId) =>
-        set((state) => ({ lines: state.lines.filter((l) => l.variantId !== variantId) })),
-      clear: () => set({ lines: [] }),
-    }),
-    {
-      name: 'noors-cart',
-      storage: createJSONStorage(() => localStorage),
-      // v1 lines (design step) had no variant ids and can't be bought; start fresh.
-      version: 2,
-      migrate: () => ({ lines: [] }),
-    },
-  ),
-);
+      });
+    } catch (err) {
+      set({ cart: before });
+      throw err;
+    }
+  },
+  remove: async (itemId) => {
+    set({ cart: await shopFetch<CartDto>(`/cart/items/${itemId}`, { method: 'DELETE' }) });
+  },
+  applyCoupon: async (code) => {
+    set({ cart: await shopFetch<CartDto>('/cart/coupon', { method: 'POST', body: { code } }) });
+  },
+  removeCoupon: async () => {
+    set({ cart: await shopFetch<CartDto>('/cart/coupon', { method: 'DELETE' }) });
+  },
+  signOut: async () => {
+    await shopFetch('/auth/logout', { method: 'POST' });
+    set({ customer: null });
+    // Signed out, the shopper is a guest again with an empty bag.
+    set({ cart: await shopFetch<CartDto>('/cart') });
+  },
+}));
 
-export const cartCount = (lines: CartLine[]) => lines.reduce((n, l) => n + l.quantity, 0);
-export const cartSubtotal = (lines: CartLine[]) =>
-  lines.reduce((sum, l) => sum + l.price * l.quantity, 0);
+export const useCartCount = () => useShop((s) => s.cart?.itemCount ?? 0);

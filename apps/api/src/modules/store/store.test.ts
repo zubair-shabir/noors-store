@@ -219,6 +219,15 @@ describe('coupons', () => {
     expect(cleared.body.couponError).toBeNull();
   });
 
+  it('rounds percentage discounts down to whole rupees', async () => {
+    await prisma.coupon.create({ data: { code: 'HALF', type: 'PERCENT', value: 50 } });
+    const agent = shopper();
+    await addToCart(agent, hoodie.m);
+    const res = await agent.post('/api/v1/cart/coupon').send({ code: 'HALF' });
+    // 50% of ₹2,499 is ₹1,249.50.
+    expect(res.body).toMatchObject({ discount: 124900, shippingFee: 9900, total: 125000 + 9900 });
+  });
+
   it('rejects unknown, expired and used-up codes', async () => {
     await prisma.coupon.createMany({
       data: [

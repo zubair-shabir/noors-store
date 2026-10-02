@@ -53,8 +53,11 @@ export function couponProblem(coupon: Coupon | null, ctx: CouponContext): string
 }
 
 export function couponDiscount(coupon: Coupon, subtotal: number): number {
+  // Percentage discounts round down to whole rupees, like the prices they come off.
   const raw =
-    coupon.type === 'PERCENT' ? Math.floor((subtotal * coupon.value) / 100) : coupon.value;
+    coupon.type === 'PERCENT'
+      ? Math.floor((subtotal * coupon.value) / 100 / 100) * 100
+      : coupon.value;
   const capped = coupon.maxDiscount !== null ? Math.min(raw, coupon.maxDiscount) : raw;
   return Math.max(0, Math.min(capped, subtotal));
 }

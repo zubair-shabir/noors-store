@@ -35,6 +35,22 @@ seconds, so dashboard edits show up in the store within a minute. "Latest Drip"
 down, the layout and home page still render without their product sections; other store
 pages show the error page.
 
+## Checkout and payments
+
+The bag lives on the server (a cookie for guests, the account once signed in). Checkout
+re-prices everything, holds the stock for 30 minutes and opens Razorpay; an unpaid order is
+cancelled after that and its items go back on sale. Shoppers sign in with a 6-digit code
+sent by email.
+
+Without `RAZORPAY_KEY_ID` in `apps/api/.env`, development uses a test payment dialog that
+stands in for Razorpay, and sign-in codes are shown on the form instead of emailed. To try
+real Razorpay test mode, add your test keys, then add a webhook in the Razorpay dashboard
+for `https://<your API>/api/v1/webhooks/razorpay` with the events `payment.captured`,
+`payment.failed` and `refund.processed`, and put its secret in `RAZORPAY_WEBHOOK_SECRET`.
+
+Sample coupons from the seed: `WINTER50` (50% off, up to ₹2,000), `WELCOME10` (10% off a
+first order) and `FLAT300` (₹300 off orders of ₹2,999 or more).
+
 ## Dashboard
 
 Open <http://localhost:3000/admin>. The seed creates a development owner account:
