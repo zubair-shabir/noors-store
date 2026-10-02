@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Reveal } from '@/components/motion/Reveal';
-import { contactEmail } from '@/lib/catalog';
+import { contactEmail } from '@/lib/site';
 
 export const metadata: Metadata = { title: 'Contact us' };
 

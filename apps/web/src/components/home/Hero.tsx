@@ -64,7 +64,7 @@ export function Hero({ eyebrow, lines, images }: HeroProps) {
         <Marquee duration={45}>
           {images.map((src, i) => (
             <div
-              key={src}
+              key={`${i}-${src}`}
               className="relative aspect-[420/606] w-[46vw] shrink-0 sm:w-[24vw] lg:w-[16.5vw]"
             >
               <Image

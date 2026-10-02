@@ -3,18 +3,18 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useId, useState } from 'react';
-import { formatINR } from '@noors/shared';
-import type { Product } from '@/lib/catalog';
+import { formatINR, type ProductSummaryDto } from '@noors/shared';
 import { useCart } from '@/lib/cart-store';
+import { productHref } from '@/lib/site';
 import { useUi } from '@/lib/ui-store';
 
 interface ProductCardProps {
-  product: Product;
+  product: ProductSummaryDto;
   priority?: boolean;
 }
 
 const action =
-  'text-[11px] font-medium tracking-[0.14em] uppercase underline underline-offset-[5px] decoration-1 transition-opacity hover:opacity-60';
+  'text-[11px] font-medium tracking-[0.14em] uppercase underline underline-offset-[5px] decoration-1 transition-opacity hover:opacity-60 disabled:cursor-not-allowed disabled:opacity-40';
 
 /**
  * Product tile from the reference site: the image cross-fades to the second photo on hover
@@ -22,15 +22,27 @@ const action =
  * Add to cart and Buy now. A rule under the card draws in from the left on hover.
  */
 export function ProductCard({ product, priority = false }: ProductCardProps) {
-  const [size, setSize] = useState(product.sizes[1] ?? product.sizes[0]);
+  const options = product.quickAdd;
+  const firstAvailable = options.find((o) => o.available) ?? options[0];
+  const [variantId, setVariantId] = useState(firstAvailable?.variantId ?? '');
   const add = useCart((s) => s.add);
   const openPanel = useUi((s) => s.open);
   const sizeId = useId();
   const [front, back] = product.images;
-  const href = `/shop/${product.category}`; // Product pages arrive in Step 5.
+  const href = productHref(product.slug);
+  const chosen = options.find((o) => o.variantId === variantId);
+  const canBuy = Boolean(chosen?.available);
 
   const addToCart = () => {
-    add({ slug: product.slug, name: product.name, image: front, size, price: product.price });
+    if (!chosen || !chosen.available) return;
+    add({
+      variantId: chosen.variantId,
+      slug: product.slug,
+      name: product.name,
+      title: chosen.label,
+      image: front?.url ?? null,
+      price: chosen.price,
+    });
     openPanel('cart');
   };
 
@@ -41,56 +53,75 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
         data-cursor-label="View"
         className="relative block aspect-[467/529] overflow-hidden bg-surface"
       >
-        <Image
-          src={front}
-          alt={product.name}
-          fill
-          priority={priority}
-          sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
-          className="object-cover transition-transform duration-[1.2s] ease-out-expo group-hover:scale-[1.03]"
-        />
+        {front && (
+          <Image
+            src={front.url}
+            alt={front.alt ?? product.name}
+            fill
+            priority={priority}
+            sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+            className="object-cover transition-transform duration-[1.2s] ease-out-expo group-hover:scale-[1.03]"
+          />
+        )}
         {back && (
           <Image
-            src={back}
+            src={back.url}
             alt=""
             fill
             sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
             className="object-cover opacity-0 transition-opacity duration-700 ease-out-expo group-hover:opacity-100"
           />
         )}
+        {!product.inStock && (
+          <span className="absolute top-3 left-3 bg-background px-2 py-1 text-[10px] font-semibold tracking-[0.14em] uppercase">
+            Sold out
+          </span>
+        )}
       </Link>
       <h3 className="mt-4 text-base tracking-[0.01em] uppercase sm:text-lg">
         <Link href={href}>{product.name}</Link>
       </h3>
       <p className="mt-1 text-base sm:text-lg">
-        {formatINR(product.price)}
-        {product.compareAtPrice && (
+        {formatINR(chosen?.price ?? product.price)}
+        {product.compareAtPrice && (chosen?.price ?? product.price) === product.price && (
           <s className="ml-2 text-subtle">{formatINR(product.compareAtPrice)}</s>
         )}
       </p>
       <div className="mt-3 flex items-center gap-5">
-        <label htmlFor={sizeId} className="sr-only">
-          Size
-        </label>
-        <select
-          id={sizeId}
-          value={size}
-          onChange={(e) => setSize(e.target.value)}
-          className="cursor-pointer border-b border-foreground bg-transparent py-0.5 pr-1 pl-1.5 text-[11px] font-medium uppercase"
-        >
-          {product.sizes.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <button type="button" className={action} onClick={addToCart}>
-          Add to cart
+        {options.length > 1 && (
+          <>
+            <label htmlFor={sizeId} className="sr-only">
+              Size
+            </label>
+            <select
+              id={sizeId}
+              value={variantId}
+              onChange={(e) => setVariantId(e.target.value)}
+              className="cursor-pointer border-b border-foreground bg-transparent py-0.5 pr-1 pl-1.5 text-[11px] font-medium uppercase"
+            >
+              {options.map((o) => (
+                <option key={o.variantId} value={o.variantId} disabled={!o.available}>
+                  {o.label}
+                  {o.available ? '' : ' (sold out)'}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        <button type="button" className={action} onClick={addToCart} disabled={!canBuy}>
+          {product.inStock ? 'Add to cart' : 'Sold out'}
         </button>
         {/* Buy now goes straight to checkout once Step 6 lands; until then it opens the cart. */}
-        <button type="button" className={`${action} no-underline`} onClick={addToCart}>
-          Buy now →
-        </button>
+        {product.inStock && (
+          <button
+            type="button"
+            className={`${action} no-underline`}
+            onClick={addToCart}
+            disabled={!canBuy}
+          >
+            Buy now →
+          </button>
+        )}
       </div>
       <span
         aria-hidden="true"

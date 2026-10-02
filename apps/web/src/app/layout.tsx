@@ -3,8 +3,11 @@ import '@fontsource-variable/inter';
 import '@fontsource/anton/400.css';
 import '@fontsource/cinzel/500.css';
 import './globals.css';
+import { siteUrl } from '@/lib/site';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  openGraph: { siteName: "Noor's", locale: 'en_IN', type: 'website' },
   title: {
     default: "Noor's | Clothing beyond time",
     template: "%s | Noor's",

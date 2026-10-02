@@ -4,7 +4,7 @@ import { FeatureTiles } from '@/components/home/FeatureTiles';
 import { StatementBand } from '@/components/home/StatementBand';
 import { StoresParallax } from '@/components/home/StoresParallax';
 import { Reveal } from '@/components/motion/Reveal';
-import { lookbook } from '@/lib/catalog';
+import { lookbook } from '@/lib/site';
 import { brandStory, storesLines } from '../content';
 
 export const metadata: Metadata = { title: 'About us' };

@@ -1,20 +1,49 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { Search, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { formatINR } from '@noors/shared';
-import { products } from '@/lib/catalog';
+import { useEffect, useState, type FormEvent } from 'react';
+import { formatINR, type ProductSummaryDto } from '@noors/shared';
 import { easeInOutQuart } from '@/lib/motion';
+import { productHref } from '@/lib/site';
 import { useUi } from '@/lib/ui-store';
 
-/** Drop-down search sheet. Matches names locally for now; Step 5 switches it to the API search endpoint. */
+/** Drop-down search sheet: live matches as you type, Enter for the full results page. */
 export function SearchPanel() {
   const panel = useUi((s) => s.panel);
   const close = useUi((s) => s.close);
+  const router = useRouter();
   const [query, setQuery] = useState('');
+  const [found, setFound] = useState<{ q: string; items: ProductSummaryDto[] } | null>(null);
   const open = panel === 'search';
+  const q = query.trim();
+
+  useEffect(() => {
+    if (!q) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/v1/search?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : { items: [] }))
+        .then((data: { items: ProductSummaryDto[] }) => setFound({ q, items: data.items }))
+        .catch(() => undefined);
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [q]);
+
+  const results = q && found?.q === q ? found.items : null;
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!q) return;
+    close();
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -23,11 +52,13 @@ export function SearchPanel() {
     return () => document.removeEventListener('keydown', onKey);
   }, [open, close]);
 
-  const q = query.trim().toLowerCase();
-  const results = q ? products.filter((p) => p.name.toLowerCase().includes(q)) : [];
-
   return (
-    <AnimatePresence onExitComplete={() => setQuery('')}>
+    <AnimatePresence
+      onExitComplete={() => {
+        setQuery('');
+        setFound(null);
+      }}
+    >
       {open && (
         <div className="fixed inset-0 z-[80]">
           <motion.div
@@ -47,7 +78,11 @@ export function SearchPanel() {
             exit={{ y: '-100%' }}
             transition={{ duration: 0.6, ease: easeInOutQuart }}
           >
-            <div className="mx-auto flex max-w-3xl items-center gap-3 border-b border-foreground pb-3">
+            <form
+              onSubmit={submit}
+              role="search"
+              className="mx-auto flex max-w-3xl items-center gap-3 border-b border-foreground pb-3"
+            >
               <Search className="h-5 w-5 shrink-0" strokeWidth={1.75} />
               <input
                 autoFocus
@@ -60,22 +95,44 @@ export function SearchPanel() {
               <button type="button" onClick={close} aria-label="Close search" className="p-1">
                 <X className="h-5 w-5" strokeWidth={1.5} />
               </button>
-            </div>
-            {q && (
+            </form>
+            {results && (
               <ul className="mx-auto mt-4 max-w-3xl divide-y divide-line">
                 {results.length === 0 && <li className="py-4 text-sm text-muted">No matches.</li>}
                 {results.map((p) => (
-                  <li key={p.slug}>
+                  <li key={p.id}>
                     <Link
-                      href={`/shop/${p.category}`}
+                      href={productHref(p.slug)}
                       onClick={close}
-                      className="flex justify-between py-3 text-sm uppercase hover:opacity-60"
+                      className="flex items-center gap-4 py-3 text-sm uppercase hover:opacity-60"
                     >
-                      <span>{p.name}</span>
+                      <span className="relative h-14 w-12 shrink-0 overflow-hidden bg-surface">
+                        {p.images[0] && (
+                          <Image
+                            src={p.images[0].url}
+                            alt=""
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                          />
+                        )}
+                      </span>
+                      <span className="flex-1">{p.name}</span>
                       <span>{formatINR(p.price)}</span>
                     </Link>
                   </li>
                 ))}
+                {results.length > 0 && (
+                  <li className="pt-4">
+                    <button
+                      type="button"
+                      onClick={submit}
+                      className="text-[11px] font-semibold tracking-[0.14em] uppercase underline underline-offset-4"
+                    >
+                      See all results
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </motion.div>

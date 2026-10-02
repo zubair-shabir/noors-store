@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Drawer } from '@/components/ui/Drawer';
-import { companyLinks, navLinks } from '@/lib/catalog';
+import { companyLinks, type NavLink } from '@/lib/site';
 import { easeOutExpo } from '@/lib/motion';
 import { useUi } from '@/lib/ui-store';
 
-export function MenuDrawer() {
+export function MenuDrawer({ navLinks }: { navLinks: NavLink[] }) {
   const panel = useUi((s) => s.panel);
   const close = useUi((s) => s.close);
 
