@@ -1,17 +1,12 @@
 import { createPrisma, type PrismaClient } from '../src/lib/prisma.js';
+import { testDatabaseUrl } from './test-database-url.js';
 
 /**
- * Integration tests run against a real Postgres (DATABASE_URL), with migrations applied.
- * CI provides one; locally `pnpm db:up && pnpm db:migrate` does.
+ * Integration tests run against a real Postgres database of their own (TEST_DATABASE_URL);
+ * test/global-setup.ts creates it and applies migrations. Locally `pnpm db:up` is enough.
  */
 export function testPrisma(): PrismaClient {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error(
-      'DATABASE_URL is not set. Integration tests need Postgres: run `pnpm db:up` and set it in apps/api/.env.',
-    );
-  }
-  return createPrisma(url);
+  return createPrisma(testDatabaseUrl());
 }
 
 /** Empties every table except Prisma's migration history. */

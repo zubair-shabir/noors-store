@@ -27,6 +27,22 @@ pnpm dev                                  # web on :3000, API on :4000
 
 Check the API: <http://localhost:4000/api/v1/health>
 
+## Dashboard
+
+Open <http://localhost:3000/admin>. The seed creates a development owner account:
+`owner@noors.local` / `noors-dev-password`.
+
+Create real accounts (owners manage the catalogue; staff can view it and change stock):
+
+```bash
+ADMIN_PASSWORD='a long password' pnpm --filter @noors/api admin:create --email you@brand.in --name "Your Name" --role OWNER
+```
+
+Running it again for the same email resets the password and signs that account out everywhere.
+
+Product photos upload to Cloudinary when `CLOUDINARY_URL` is set in `apps/api/.env`; without it
+they are saved to `apps/api/uploads` and served at `/uploads`.
+
 ## Scripts
 
 | Command                                      | Does                                                                       |
@@ -44,4 +60,4 @@ Check the API: <http://localhost:4000/api/v1/health>
 
 The schema lives in `apps/api/prisma/schema.prisma`. Every change becomes a plain SQL migration in `apps/api/prisma/migrations`, which is committed and can be read or edited before it runs. Rules Prisma can't express (stock never below zero, reserved never above stock, positive prices and quantities) are hand-written `CHECK` constraints at the end of the migration.
 
-API tests run against a real Postgres: start it with `pnpm db:up` and apply migrations first. The API endpoints are listed in [apps/api/README.md](apps/api/README.md).
+API tests run against a real Postgres database of their own (`TEST_DATABASE_URL`, created and migrated automatically), so `pnpm test` never touches your development data. Only `pnpm db:up` is needed first. The API endpoints are listed in [apps/api/README.md](apps/api/README.md).

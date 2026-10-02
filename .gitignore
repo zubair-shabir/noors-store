@@ -13,3 +13,4 @@ next-env.d.ts
 *.log
 .vercel
 apps/api/src/generated
+apps/api/uploads

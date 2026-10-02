@@ -28,6 +28,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://noors:noors@localhost:5432/noors?schema=public
+      TEST_DATABASE_URL: postgresql://noors:noors@localhost:5432/noors_test?schema=public
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4
