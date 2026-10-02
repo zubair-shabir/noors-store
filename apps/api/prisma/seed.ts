@@ -4,7 +4,8 @@
  * products by slug. Run with `pnpm db:seed`.
  *
  * Also creates a development owner account (owner@noors.local / noors-dev-password) and the
- * home page banners, both only when missing so dashboard edits survive a re-seed.
+ * home page banners and sample coupons, all only when missing so dashboard edits survive a
+ * re-seed.
  */
 import 'dotenv/config';
 import { createPrisma } from '../src/lib/prisma.js';
@@ -211,6 +212,16 @@ async function main() {
     update: {},
   });
 
+  // Sample codes: the one the announcement bar advertises, and a first-order welcome code.
+  const coupons = [
+    { code: 'WINTER50', type: 'PERCENT' as const, value: 50, maxDiscount: rupees(2000) },
+    { code: 'WELCOME10', type: 'PERCENT' as const, value: 10, firstOrderOnly: true },
+    { code: 'FLAT300', type: 'FLAT' as const, value: rupees(300), minOrderValue: rupees(2999) },
+  ];
+  for (const c of coupons) {
+    await prisma.coupon.upsert({ where: { code: c.code }, create: c, update: {} });
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     await prisma.adminUser.upsert({
       where: { email: 'owner@noors.local' },
@@ -256,6 +267,7 @@ async function main() {
     products: await prisma.product.count(),
     variants: await prisma.variant.count(),
     banners: await prisma.banner.count(),
+    coupons: await prisma.coupon.count(),
     admins: await prisma.adminUser.count(),
   };
   console.log('Seeded', counts);

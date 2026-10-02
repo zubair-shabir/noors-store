@@ -9,7 +9,7 @@ export function testPrisma(): PrismaClient {
   return createPrisma(testDatabaseUrl());
 }
 
-/** Empties every table except Prisma's migration history. */
+/** Empties every table except Prisma's migration history, and restarts order numbers. */
 export async function resetDatabase(prisma: PrismaClient) {
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
@@ -17,6 +17,8 @@ export async function resetDatabase(prisma: PrismaClient) {
   if (tables.length === 0) return;
   const list = tables.map((t) => `"public"."${t.tablename}"`).join(', ');
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
+  // Not owned by a column, so RESTART IDENTITY leaves it alone.
+  await prisma.$executeRawUnsafe('ALTER SEQUENCE IF EXISTS order_number_seq RESTART');
 }
 
 interface FixtureVariant {
