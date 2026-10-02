@@ -9,11 +9,12 @@
     "start": "node dist/server.js",
     "lint": "eslint .",
     "typecheck": "prisma generate && tsc --noEmit",
-    "test": "vitest run",
+    "test": "prisma generate && vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@noors/shared": "workspace:*",
