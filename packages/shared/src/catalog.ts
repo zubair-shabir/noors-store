@@ -41,6 +41,18 @@ export interface ProductSummaryDto {
   inStock: boolean;
   sizes: string[];
   colours: OptionValueDto[];
+  /**
+   * The card's size picker: one entry per size, in the colour of the price-setting variant
+   * ("One size" when the product has no Size option).
+   */
+  quickAdd: QuickAddDto[];
+}
+
+export interface QuickAddDto {
+  label: string;
+  variantId: string;
+  price: Paise;
+  available: boolean;
 }
 
 export interface VariantDto {

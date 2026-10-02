@@ -1,10 +1,12 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { Minus, Plus } from 'lucide-react';
 import { formatINR } from '@noors/shared';
 import { Drawer } from '@/components/ui/Drawer';
-import { cartSubtotal, useCart } from '@/lib/cart-store';
+import { MAX_LINE_QUANTITY, cartSubtotal, useCart } from '@/lib/cart-store';
+import { productHref } from '@/lib/site';
 import { useUi } from '@/lib/ui-store';
 
 export function CartDrawer() {
@@ -46,13 +48,21 @@ export function CartDrawer() {
       ) : (
         <ul className="divide-y divide-line">
           {lines.map((line) => (
-            <li key={`${line.slug}-${line.size}`} className="flex gap-4 py-5 first:pt-0">
-              <div className="relative h-28 w-24 shrink-0 overflow-hidden bg-surface">
-                <Image src={line.image} alt="" fill sizes="96px" className="object-cover" />
-              </div>
+            <li key={line.variantId} className="flex gap-4 py-5 first:pt-0">
+              <Link
+                href={productHref(line.slug)}
+                onClick={close}
+                className="relative h-28 w-24 shrink-0 overflow-hidden bg-surface"
+              >
+                {line.image && (
+                  <Image src={line.image} alt="" fill sizes="96px" className="object-cover" />
+                )}
+              </Link>
               <div className="flex flex-1 flex-col">
-                <p className="text-sm uppercase">{line.name}</p>
-                <p className="mt-1 text-xs text-muted">Size {line.size}</p>
+                <Link href={productHref(line.slug)} onClick={close} className="text-sm uppercase">
+                  {line.name}
+                </Link>
+                <p className="mt-1 text-xs text-muted">{line.title}</p>
                 <p className="mt-1 text-sm">{formatINR(line.price)}</p>
                 <div className="mt-auto flex items-center justify-between">
                   <div className="flex items-center border border-line">
@@ -60,16 +70,17 @@ export function CartDrawer() {
                       type="button"
                       className="p-2"
                       aria-label="Decrease quantity"
-                      onClick={() => setQuantity(line.slug, line.size, line.quantity - 1)}
+                      onClick={() => setQuantity(line.variantId, line.quantity - 1)}
                     >
                       <Minus className="h-3 w-3" />
                     </button>
                     <span className="w-6 text-center text-sm tabular-nums">{line.quantity}</span>
                     <button
                       type="button"
-                      className="p-2"
+                      className="p-2 disabled:opacity-30"
                       aria-label="Increase quantity"
-                      onClick={() => setQuantity(line.slug, line.size, line.quantity + 1)}
+                      disabled={line.quantity >= MAX_LINE_QUANTITY}
+                      onClick={() => setQuantity(line.variantId, line.quantity + 1)}
                     >
                       <Plus className="h-3 w-3" />
                     </button>
@@ -77,7 +88,7 @@ export function CartDrawer() {
                   <button
                     type="button"
                     className="text-[11px] tracking-[0.12em] text-muted uppercase underline-offset-4 hover:text-foreground hover:underline"
-                    onClick={() => remove(line.slug, line.size)}
+                    onClick={() => remove(line.variantId)}
                   >
                     Remove
                   </button>

@@ -5,10 +5,12 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Paise } from '@noors/shared';
 
 export interface CartLine {
+  variantId: string;
   slug: string;
   name: string;
-  image: string;
-  size: string;
+  /** e.g. "M / Olive", or "One size". */
+  title: string;
+  image: string | null;
   price: Paise;
   quantity: number;
 }
@@ -16,43 +18,57 @@ export interface CartLine {
 interface CartState {
   lines: CartLine[];
   add: (line: Omit<CartLine, 'quantity'>, quantity?: number) => void;
-  setQuantity: (slug: string, size: string, quantity: number) => void;
-  remove: (slug: string, size: string) => void;
+  setQuantity: (variantId: string, quantity: number) => void;
+  remove: (variantId: string) => void;
   clear: () => void;
 }
 
-const sameLine = (a: Pick<CartLine, 'slug' | 'size'>, b: Pick<CartLine, 'slug' | 'size'>) =>
-  a.slug === b.slug && a.size === b.size;
+/** Most of one variant a shopper can put in the cart. */
+export const MAX_LINE_QUANTITY = 10;
 
-// Guest cart kept in the browser; Step 6 moves it to the API for signed-in customers.
+// Guest cart kept in the browser; Step 6 moves it to the API, which re-prices every line.
 export const useCart = create<CartState>()(
   persist(
     (set) => ({
       lines: [],
       add: (line, quantity = 1) =>
         set((state) => {
-          const existing = state.lines.find((l) => sameLine(l, line));
+          const existing = state.lines.find((l) => l.variantId === line.variantId);
           if (existing) {
             return {
               lines: state.lines.map((l) =>
-                sameLine(l, line) ? { ...l, quantity: l.quantity + quantity } : l,
+                l.variantId === line.variantId
+                  ? { ...l, ...line, quantity: Math.min(MAX_LINE_QUANTITY, l.quantity + quantity) }
+                  : l,
               ),
             };
           }
-          return { lines: [...state.lines, { ...line, quantity }] };
+          return {
+            lines: [...state.lines, { ...line, quantity: Math.min(MAX_LINE_QUANTITY, quantity) }],
+          };
         }),
-      setQuantity: (slug, size, quantity) =>
+      setQuantity: (variantId, quantity) =>
         set((state) => ({
           lines:
             quantity <= 0
-              ? state.lines.filter((l) => !sameLine(l, { slug, size }))
-              : state.lines.map((l) => (sameLine(l, { slug, size }) ? { ...l, quantity } : l)),
+              ? state.lines.filter((l) => l.variantId !== variantId)
+              : state.lines.map((l) =>
+                  l.variantId === variantId
+                    ? { ...l, quantity: Math.min(MAX_LINE_QUANTITY, quantity) }
+                    : l,
+                ),
         })),
-      remove: (slug, size) =>
-        set((state) => ({ lines: state.lines.filter((l) => !sameLine(l, { slug, size })) })),
+      remove: (variantId) =>
+        set((state) => ({ lines: state.lines.filter((l) => l.variantId !== variantId) })),
       clear: () => set({ lines: [] }),
     }),
-    { name: 'noors-cart', storage: createJSONStorage(() => localStorage) },
+    {
+      name: 'noors-cart',
+      storage: createJSONStorage(() => localStorage),
+      // v1 lines (design step) had no variant ids and can't be bought; start fresh.
+      version: 2,
+      migrate: () => ({ lines: [] }),
+    },
   ),
 );
 

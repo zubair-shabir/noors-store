@@ -1,7 +1,7 @@
 import type { FaqItem } from '@/components/home/Faq';
-import { contactEmail } from '@/lib/catalog';
+import { contactEmail } from '@/lib/site';
 
-// Copy from the reference site. Moves into admin-editable content in Step 4.
+// Copy from the reference site.
 
 export const brandStory =
   "Born from Kashmir and shaped by purpose, every detail reflects confidence that feels natural. Noor's focuses on comfort, ease, and control in daily movement. Wear it your way, without forcing a statement just owning it. Rooted in culture and refined through intention, each piece is crafted for confidence that lasts. Every drop blends comfort, freedom, and control into something effortless. It's made to fit your life, your pace, and your way of wearing it.";

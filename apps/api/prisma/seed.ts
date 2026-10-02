@@ -1,5 +1,5 @@
 /**
- * Development seed: the four categories and placeholder products from the design step,
+ * Development seed: the three categories and placeholder products from the design step,
  * each with Size (and some with Colour) variants. Safe to re-run: it replaces seeded
  * products by slug. Run with `pnpm db:seed`.
  *
@@ -19,10 +19,9 @@ const rupees = (n: number) => n * 100;
 const SIZES = ['S', 'M', 'L', 'XL'];
 
 const categories = [
-  { slug: 'latest', name: 'Latest Drip', imageUrl: img('lookbook-2'), sortOrder: 0 },
-  { slug: 'hoodies', name: 'Hoodies', imageUrl: img('kashmir-heritage-hoodie-1'), sortOrder: 1 },
-  { slug: 'jackets', name: 'Jackets', imageUrl: img('lookbook-1'), sortOrder: 2 },
-  { slug: 'overshirts', name: 'Overshirts', imageUrl: img('lookbook-4'), sortOrder: 3 },
+  { slug: 'hoodies', name: 'Hoodies', imageUrl: img('kashmir-heritage-hoodie-1'), sortOrder: 0 },
+  { slug: 'jackets', name: 'Jackets', imageUrl: img('lookbook-1'), sortOrder: 1 },
+  { slug: 'overshirts', name: 'Overshirts', imageUrl: img('lookbook-4'), sortOrder: 2 },
 ];
 
 interface SeedProduct {
@@ -105,6 +104,10 @@ const seedProducts: SeedProduct[] = [
 ];
 
 async function main() {
+  // "Latest Drip" is the storefront's newest-first listing, not a category. Older seeds made
+  // one; remove it while it is still empty.
+  await prisma.category.deleteMany({ where: { slug: 'latest', products: { none: {} } } });
+
   const categoryIds = new Map<string, string>();
   for (const c of categories) {
     const row = await prisma.category.upsert({

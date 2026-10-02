@@ -1,15 +1,15 @@
 import { ButtonLink } from '@/components/ui/ButtonLink';
 import { Reveal } from '@/components/motion/Reveal';
-import type { Product } from '@/lib/catalog';
+import type { ProductSummaryDto } from '@noors/shared';
 import { ProductCard } from './ProductCard';
 
 interface ProductRowProps {
   title: string;
-  products: Product[];
+  products: ProductSummaryDto[];
   viewAllHref: string;
 }
 
-/** "Explore Noor's" / "Latest Drip": display heading, View all button, three product cards. */
+/** "Explore Noor's" / "Latest Drip": display heading, View all button, product cards. */
 export function ProductRow({ title, products, viewAllHref }: ProductRowProps) {
   return (
     <section className="mx-auto max-w-6xl px-4 py-16 sm:px-10 sm:py-24">

@@ -27,6 +27,14 @@ pnpm dev                                  # web on :3000, API on :4000
 
 Check the API: <http://localhost:4000/api/v1/health>
 
+## Storefront
+
+Every store page reads the catalogue from the API (`API_URL`). Responses are cached for 60
+seconds, so dashboard edits show up in the store within a minute. "Latest Drip"
+(`/shop/latest`) is every active product, newest first, not a category. If the API is
+down, the layout and home page still render without their product sections; other store
+pages show the error page.
+
 ## Dashboard
 
 Open <http://localhost:3000/admin>. The seed creates a development owner account:

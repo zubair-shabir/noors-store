@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
-import { contactEmail, navLinks } from '@/lib/catalog';
+import { contactEmail, type NavLink } from '@/lib/site';
 
-const columns = [
-  { title: 'Clothing', links: navLinks.map((l) => ({ href: l.href, label: l.label })) },
+const columnsFor = (navLinks: NavLink[]) => [
+  { title: 'Clothing', links: navLinks },
   {
     title: 'Company',
     links: [
@@ -24,7 +24,8 @@ const columns = [
   },
 ];
 
-export function Footer() {
+export function Footer({ navLinks }: { navLinks: NavLink[] }) {
+  const columns = columnsFor(navLinks);
   return (
     <footer className="bg-black text-white">
       <div className="mx-auto grid max-w-6xl gap-12 px-6 pt-20 pb-10 md:grid-cols-[1.2fr_2fr] md:px-10">

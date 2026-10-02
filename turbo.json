@@ -4,13 +4,13 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["API_URL"]
+      "env": ["API_URL", "SITE_URL"]
     },
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
-      "env": ["API_URL"]
+      "env": ["API_URL", "SITE_URL"]
     },
     "lint": {
       "dependsOn": ["^build"]

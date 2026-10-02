@@ -3,6 +3,7 @@ import type {
   OptionValueDto,
   ProductDetailDto,
   ProductSummaryDto,
+  QuickAddDto,
   VariantDto,
 } from '@noors/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
@@ -51,6 +52,39 @@ function optionValues(product: ProductWithRelations, name: string): OptionValueD
   return (option?.values ?? []).map((v) => ({ id: v.id, value: v.value, swatch: v.swatch }));
 }
 
+function quickAdd(product: ProductWithRelations, display: VariantRow | undefined): QuickAddDto[] {
+  if (!display) return [];
+  const sizeOption = product.options.find((o) => o.name.toLowerCase() === 'size');
+  if (!sizeOption) {
+    return [
+      {
+        label: 'One size',
+        variantId: display.id,
+        price: display.price,
+        available: availableUnits(display) > 0,
+      },
+    ];
+  }
+  const sizeIds = new Set(sizeOption.values.map((v) => v.id));
+  const others = display.optionValues.map((o) => o.optionValueId).filter((id) => !sizeIds.has(id));
+  return sizeOption.values.flatMap((size) => {
+    const variant = product.variants.find((v) => {
+      const ids = v.optionValues.map((o) => o.optionValueId);
+      return ids.includes(size.id) && others.every((id) => ids.includes(id));
+    });
+    return variant
+      ? [
+          {
+            label: size.value,
+            variantId: variant.id,
+            price: variant.price,
+            available: availableUnits(variant) > 0,
+          },
+        ]
+      : [];
+  });
+}
+
 export function toProductSummary(product: ProductWithRelations): ProductSummaryDto {
   const variant = displayVariant(product);
   return {
@@ -64,6 +98,7 @@ export function toProductSummary(product: ProductWithRelations): ProductSummaryD
     inStock: isInStock(product),
     sizes: optionValues(product, 'size').map((v) => v.value),
     colours: optionValues(product, 'colour'),
+    quickAdd: quickAdd(product, variant),
   };
 }
 

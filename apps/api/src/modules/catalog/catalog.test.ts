@@ -150,6 +150,24 @@ describe('GET /products', () => {
     ]);
   });
 
+  it('offers quick-add sizes in the colour of the price-setting variant', async () => {
+    const res = await api().get('/api/v1/products?category=hoodies');
+    const byslug = Object.fromEntries(res.body.items.map((p: { slug: string }) => [p.slug, p]));
+    const labels = (slug: string) =>
+      byslug[slug].quickAdd.map((q: { label: string; available: boolean }) => [
+        q.label,
+        q.available,
+      ]);
+    expect(labels('heritage-hoodie')).toEqual([
+      ['S', false],
+      ['M', true],
+      ['L', true],
+    ]);
+    // Priced by M / Black, so only Black sizes are offered; XL is switched off.
+    expect(labels('jacquard-hoodie')).toEqual([['M', true]]);
+    expect(byslug['heritage-hoodie'].quickAdd[1].price).toBe(259900);
+  });
+
   it('sorts by price in both directions', async () => {
     expect(slugs(await api().get('/api/v1/products?sort=price_asc'))).toEqual([
       'heritage-hoodie',
