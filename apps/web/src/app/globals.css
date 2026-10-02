@@ -1,19 +1,113 @@
 @import 'tailwindcss';
 
-/* Design tokens from the reference storefront land here in Step 2. */
+/*
+ * Design tokens taken from the reference storefront recording (Oct 2026).
+ * Light is the default; [data-theme='dark'] mirrors the site's moon toggle.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #111111;
+  --background: #fdfdfd;
+  --foreground: #1c1c1c;
+  --muted: #6b6b6b;
+  --subtle: #9a9a9a;
+  --line: #e4e4e4;
+  --surface: #f4f4f4;
+  --band: #1c1c1c;
+  --band-foreground: #fdfdfd;
+  --statement: #c9c9c9;
+  --header: rgb(253 253 253 / 0.82);
+  --inverse: #000000;
+  --inverse-foreground: #ffffff;
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --background: #0e0e0e;
+  --foreground: #f2f2f2;
+  --muted: #a3a3a3;
+  --subtle: #7a7a7a;
+  --line: #2a2a2a;
+  --surface: #191919;
+  --band: #f2f2f2;
+  --band-foreground: #111111;
+  --statement: #3a3a3a;
+  --header: rgb(14 14 14 / 0.82);
+  --inverse: #f2f2f2;
+  --inverse-foreground: #0e0e0e;
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --color-band: var(--band);
+  --color-band-foreground: var(--band-foreground);
+  --color-statement: var(--statement);
+  --color-inverse: var(--inverse);
+  --color-inverse-foreground: var(--inverse-foreground);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Anton', 'Impact', 'Arial Narrow', sans-serif;
+  --font-brand: 'Cinzel', 'Times New Roman', serif;
+  --ease-out-expo: var(--ease-out-expo);
+  --ease-in-out-quart: var(--ease-in-out-quart);
+  --animate-marquee: marquee var(--marquee-duration, 30s) linear infinite;
+
+  @keyframes marquee {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+}
+
+html {
+  background: var(--background);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Lenis smooth scroll */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* The intro loader is server-rendered; this hides it before paint once it has played this session. */
+html[data-intro='seen'] [data-intro-loader] {
+  display: none;
+}
+
+/* Hide the system cursor dot follower on touch devices. */
+@media (hover: none), (pointer: coarse) {
+  [data-cursor-follower] {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
