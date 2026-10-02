@@ -33,7 +33,7 @@ export function Header() {
             onClick={() => open('menu')}
             aria-label="Open menu"
           >
-            <Menu className="h-6 w-6" strokeWidth={1.75} />
+            <Menu className="h-7 w-7" strokeWidth={2.25} />
           </button>
         </div>
         <Link href="/" aria-label="Noor's home" className="pt-2">
@@ -47,7 +47,7 @@ export function Header() {
             onClick={() => open('cart')}
             aria-label={`Open cart, ${hydrated ? count : 0} items`}
           >
-            <ShoppingBag className="h-5 w-5" strokeWidth={1.75} />
+            <ShoppingBag className="h-[22px] w-[22px]" strokeWidth={2.25} />
             {hydrated && count > 0 && (
               <span className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
                 {count}
@@ -60,7 +60,7 @@ export function Header() {
             onClick={() => open('search')}
             aria-label="Search"
           >
-            <Search className="h-5 w-5" strokeWidth={1.75} />
+            <Search className="h-[22px] w-[22px]" strokeWidth={2.25} />
           </button>
         </div>
       </div>

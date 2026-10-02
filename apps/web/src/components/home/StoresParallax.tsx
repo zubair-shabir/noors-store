@@ -42,7 +42,7 @@ export function StoresParallax({ lines, images }: StoresParallaxProps) {
         </div>
       </motion.div>
       <motion.h2
-        className="relative mx-auto max-w-2xl px-6 text-center font-display text-[clamp(2rem,4.6vw,3.4rem)] leading-[1.15] text-statement uppercase"
+        className="relative mx-auto max-w-2xl px-6 text-center font-display text-[clamp(2rem,4.6vw,3.4rem)] leading-[1.32] text-statement uppercase"
         style={reduce ? undefined : { y: textY }}
       >
         {lines.map((line) => (
