@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { defineConfig, env } from 'prisma/config';
+import { defineConfig } from 'prisma/config';
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
@@ -7,6 +7,8 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    url: env('DATABASE_URL'),
+    // Read lazily so `prisma generate` (build, typecheck) works without a database configured.
+    // Commands that touch the database fail with a clear error if DATABASE_URL is missing.
+    url: process.env.DATABASE_URL,
   },
 });
