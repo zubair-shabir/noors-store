@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrderDto } from '@noors/shared';
+import { formatINR, type OrderDto } from '@noors/shared';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useShop } from '@/lib/cart-store';
@@ -70,10 +70,22 @@ export function OrderConfirmation({ number, accessKey }: { number: string; acces
           ? 'We are waiting for Razorpay to confirm your payment. This page updates on its own; if you closed the payment window, nothing was charged.'
           : order.status === 'CANCELLED'
             ? 'This order was not paid in time, so we released the items. If money left your account, write to us and we will refund it.'
-            : `Your order is confirmed. We will email ${order.email} when it ships.`}
+            : order.paymentMethod === 'COD'
+              ? `Your order is confirmed. Please keep ${formatINR(order.total)} ready for the courier; we will email ${order.email} when it ships.`
+              : `Your order is confirmed. We will email ${order.email} when it ships.`}
       </p>
       <div className="mt-12">
-        <OrderDetail order={order} />
+        <OrderDetail
+          order={order}
+          requestReturn={async (body) =>
+            setOrder(
+              await shopFetch<OrderDto>(
+                `/orders/${encodeURIComponent(number)}/returns?key=${encodeURIComponent(accessKey)}`,
+                { method: 'POST', body },
+              ),
+            )
+          }
+        />
       </div>
       <div className="mt-12 flex flex-wrap gap-4">
         <Link href="/shop/latest" className={secondaryButton}>

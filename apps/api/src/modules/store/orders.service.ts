@@ -546,6 +546,8 @@ export class OrderService {
       shipment: dto.shipment,
       scans: (Array.isArray(events) ? events : []) as unknown as TrackingScanDto[],
       timeline: dto.timeline,
+      returns: dto.returns,
+      returnableUntil: dto.returnableUntil,
     };
   }
 
@@ -573,6 +575,7 @@ export class OrderService {
       email: o.email,
       phone: o.phone,
       items: o.items.map((i) => ({
+        id: i.id,
         name: i.productName,
         title: i.variantTitle,
         sku: i.sku,

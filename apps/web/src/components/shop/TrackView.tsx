@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { ShopError, shopFetch } from '@/lib/shop-api';
 import { errorText, primaryButton, TextField } from './form';
 import { OrderLines } from './OrderLines';
+import { ReturnPanel } from './ReturnPanel';
 import { Scans, ShipmentSummary, Timeline } from './ShipmentTracking';
 
 /** Public order tracking: order number plus the phone number it was placed with. */
@@ -111,6 +112,21 @@ export function TrackView({
             <Timeline entries={result.timeline} />
           </dl>
         </div>
+      )}
+      {result && (
+        <ReturnPanel
+          items={result.items}
+          returns={result.returns}
+          returnableUntil={result.returnableUntil}
+          submit={async (body) =>
+            setResult(
+              await shopFetch<TrackingDto>('/track/returns', {
+                method: 'POST',
+                body: { order: result.number, phone: phone.trim(), ...body },
+              }),
+            )
+          }
+        />
       )}
     </div>
   );

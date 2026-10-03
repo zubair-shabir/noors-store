@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* dark: utilities follow the site's theme toggle, not the operating system. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 /*
  * Design tokens taken from the reference storefront recording (Oct 2026).
  * Light is the default; [data-theme='dark'] mirrors the site's moon toggle.

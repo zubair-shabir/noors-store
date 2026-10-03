@@ -147,6 +147,9 @@ export class ReturnService {
       );
     }
     const order = current.order;
+    const refunding = status === 'COMPLETED' && current.type === 'RETURN' && !!refundAmount;
+    // Catch a refund that cannot work (cash on delivery, too much) before completing the return.
+    if (refunding) await this.adminOrders.checkRefund(order.id, refundAmount);
     const lines = toAdminReturn(current, order).items;
 
     await this.prisma.$transaction(async (tx) => {
@@ -198,7 +201,7 @@ export class ReturnService {
       });
     });
 
-    if (status === 'COMPLETED' && current.type === 'RETURN' && refundAmount) {
+    if (refunding) {
       await this.adminOrders.issueRefund(
         order.id,
         refundAmount,

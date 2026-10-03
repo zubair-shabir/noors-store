@@ -237,6 +237,7 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
 };
 
 export interface OrderItemDto {
+  id: string;
   name: string;
   title: string;
   sku: string;

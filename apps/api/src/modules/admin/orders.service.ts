@@ -338,6 +338,15 @@ export class AdminOrderService {
    * Records the refund first (so two clicks can't both refund), then asks Razorpay, then
    * settles the record with Razorpay's answer.
    */
+  /** Throws the error issueRefund would, before anything else changes. */
+  async checkRefund(orderId: string, amount: number): Promise<void> {
+    const order = await this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: { payments: true, refunds: true },
+    });
+    refundablePayment(order, amount);
+  }
+
   async issueRefund(
     orderId: string,
     amount: number,
@@ -351,29 +360,7 @@ export class AdminOrderService {
         where: { id: orderId },
         include: { payments: true, refunds: true },
       });
-      const payment = order.payments.find(
-        (p) =>
-          p.provider === 'RAZORPAY' &&
-          p.razorpayPaymentId &&
-          ['CAPTURED', 'PARTIALLY_REFUNDED'].includes(p.status),
-      );
-      if (!payment) {
-        throw new HttpError(
-          400,
-          order.paymentMethod === 'COD'
-            ? 'Cash-on-delivery orders are refunded outside the store, by bank transfer or UPI'
-            : 'There is no online payment on this order to refund',
-          'nothing_to_refund',
-        );
-      }
-      const left = refundableOf(order);
-      if (amount > left) {
-        throw new HttpError(
-          400,
-          `At most ₹${(left / 100).toLocaleString('en-IN')} can be refunded`,
-          'too_much',
-        );
-      }
+      const payment = refundablePayment(order, amount);
       const created = await tx.refund.create({
         data: { orderId, paymentId: payment.id, amount, reason },
       });
@@ -472,6 +459,39 @@ export async function restock(
       },
     });
   }
+}
+
+/** The online payment a refund of `amount` goes back to; throws when there is none or too little. */
+function refundablePayment<
+  P extends { provider: string; status: string; amount: number; razorpayPaymentId: string | null },
+>(
+  order: { paymentMethod: string; payments: P[]; refunds: { status: string; amount: number }[] },
+  amount: number,
+): P {
+  const payment = order.payments.find(
+    (p) =>
+      p.provider === 'RAZORPAY' &&
+      p.razorpayPaymentId &&
+      ['CAPTURED', 'PARTIALLY_REFUNDED'].includes(p.status),
+  );
+  if (!payment) {
+    throw new HttpError(
+      400,
+      order.paymentMethod === 'COD'
+        ? 'Cash-on-delivery orders are refunded outside the store, by bank transfer or UPI'
+        : 'There is no online payment on this order to refund',
+      'nothing_to_refund',
+    );
+  }
+  const left = refundableOf(order);
+  if (amount > left) {
+    throw new HttpError(
+      400,
+      `At most ₹${(left / 100).toLocaleString('en-IN')} can be refunded`,
+      'too_much',
+    );
+  }
+  return payment;
 }
 
 /** Paid online and not refunded yet. */

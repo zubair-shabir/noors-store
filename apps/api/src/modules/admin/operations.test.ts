@@ -439,6 +439,15 @@ describe('returns', () => {
           .send({ status: 'COMPLETED', refundAmount: 249900 })
       ).status,
     ).toBe(403);
+    // A refund that cannot work is refused before the return is completed.
+    expect(
+      (
+        await as(owner)
+          .patch(`/returns/${ret.id}`)
+          .send({ status: 'COMPLETED', refundAmount: 99_999_999 })
+      ).status,
+    ).toBe(400);
+    expect((await as(staff).get('/returns')).body.items[0].status).toBe('RECEIVED');
     const done = await as(owner)
       .patch(`/returns/${ret.id}`)
       .send({ status: 'COMPLETED', refundAmount: 249900, restock: true });

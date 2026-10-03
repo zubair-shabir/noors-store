@@ -39,7 +39,17 @@ export function AccountOrder({ number }: { number: string }) {
         ← All orders
       </Link>
       <h1 className="mt-6 mb-12 font-display text-5xl uppercase sm:text-6xl">{order.number}</h1>
-      <OrderDetail order={order} />
+      <OrderDetail
+        order={order}
+        requestReturn={async (body) =>
+          setOrder(
+            await shopFetch<OrderDto>(`/me/orders/${encodeURIComponent(number)}/returns`, {
+              method: 'POST',
+              body,
+            }),
+          )
+        }
+      />
     </div>
   );
 }

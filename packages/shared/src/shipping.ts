@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { phoneSchema, pincodeSchema } from './schemas.js';
 import type { OrderItemDto, OrderStatus } from './commerce.js';
+import type { ReturnSummaryDto } from './operations.js';
 
 export const serviceabilityQuerySchema = z.object({ pincode: pincodeSchema });
 
@@ -63,4 +64,6 @@ export interface TrackingDto {
   shipment: ShipmentDto | null;
   scans: TrackingScanDto[];
   timeline: TimelineEntryDto[];
+  returns: ReturnSummaryDto[];
+  returnableUntil: string | null;
 }

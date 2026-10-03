@@ -42,12 +42,14 @@ export function Totals({
   discount,
   discountLabel,
   shippingFee,
+  shippingLabel = 'Shipping',
   total,
 }: {
   subtotal: Paise;
   discount: Paise;
   discountLabel?: string;
   shippingFee: Paise;
+  shippingLabel?: string;
   total: Paise;
 }) {
   return (
@@ -63,7 +65,7 @@ export function Totals({
         </div>
       )}
       <div className="flex justify-between">
-        <dt className="text-muted">Shipping</dt>
+        <dt className="text-muted">{shippingLabel}</dt>
         <dd className="tabular-nums">{shippingFee === 0 ? 'Free' : formatINR(shippingFee)}</dd>
       </div>
       <div className="flex justify-between border-t border-line pt-3 text-base font-semibold">
