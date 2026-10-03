@@ -5,12 +5,18 @@ import type {
   CustomerDto,
   OrderDto,
   OrderSummaryDto,
+  ShipmentDto,
+  TimelineEntryDto,
+  TrackingDto,
+  TrackingScanDto,
 } from '@noors/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { HttpError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import type { PaymentGateway } from '../../lib/payments.js';
 import type { PrismaClient } from '../../lib/prisma.js';
+import type { EmailOutbox } from '../notify/outbox.js';
+import type { FulfilmentService } from '../shipping/fulfilment.service.js';
 import {
   hashToken,
   lineOf,
@@ -28,8 +34,25 @@ type Tx = Prisma.TransactionClient;
 
 const orderInclude = {
   items: { include: { variant: { select: { product: { select: { slug: true } } } } } },
+  shipments: { where: { status: { not: 'CANCELLED' } }, orderBy: { createdAt: 'desc' }, take: 1 },
+  events: { orderBy: { createdAt: 'asc' }, select: { type: true, createdAt: true } },
 } satisfies Prisma.OrderInclude;
 type OrderWithItems = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
+
+/** Order events customers see, and how they read. Everything else is for the brand only. */
+const TIMELINE_LABELS: Record<string, string> = {
+  created: 'Order placed',
+  paid: 'Payment received',
+  late_payment: 'Payment received',
+  packed: 'Packed and handed to the courier',
+  shipped: 'Shipped',
+  out_for_delivery: 'Out for delivery',
+  delivered: 'Delivered',
+  expired: 'Cancelled: not paid in time',
+  abandoned: 'Cancelled',
+  payment_setup_failed: 'Cancelled',
+  cancelled: 'Cancelled',
+};
 
 export interface CheckoutRequest {
   email: string;
@@ -51,6 +74,8 @@ export class OrderService {
     private readonly prisma: PrismaClient,
     private readonly carts: CartService,
     private readonly gateway: PaymentGateway,
+    private readonly outbox: EmailOutbox,
+    private readonly fulfilment: FulfilmentService,
   ) {}
 
   /**
@@ -89,6 +114,13 @@ export class OrderService {
     const amounts = totals(subtotal, discount, await shippingSettings(this.prisma));
     if (amounts.total < 100) {
       throw new HttpError(400, 'The order total must be at least ₹1', 'total_too_low');
+    }
+
+    if (!(await this.fulfilment.canDeliver(input.address.pincode))) {
+      const message = "We can't deliver to this pincode yet";
+      throw new HttpError(422, message, 'not_serviceable', [
+        { path: ['address', 'pincode'], message },
+      ]);
     }
 
     const accessToken = randomBytes(24).toString('base64url');
@@ -220,7 +252,7 @@ export class OrderService {
    * otherwise the order stays cancelled and is flagged for a refund.
    */
   async markPaid(p: PaymentConfirmation): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    const confirmed = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { razorpayOrderId: p.razorpayOrderId },
       });
@@ -263,7 +295,7 @@ export class OrderService {
                 'Payment arrived after the order expired and the items had sold out. Refund this payment.',
             },
           });
-          return;
+          return false;
         }
         if (order.couponId) {
           await tx.$executeRaw`
@@ -279,7 +311,7 @@ export class OrderService {
         });
       } else {
         // Already confirmed (the other of checkout and webhook got here first).
-        return;
+        return false;
       }
 
       await tx.inventoryLog.createMany({
@@ -307,26 +339,43 @@ export class OrderService {
         await tx.cartItem.deleteMany({ where: { cartId: order.cartId } });
         await tx.cart.updateMany({ where: { id: order.cartId }, data: { couponCode: null } });
       }
+      await this.outbox.queueForOrder(tx, 'order_confirmed', order.id);
+      await this.outbox.queueForOrder(tx, 'new_order_alert', order.id);
+      await this.fulfilment.queueBooking(tx, order.id);
+      return true;
     });
+    if (confirmed) {
+      this.outbox.kick();
+      this.fulfilment.kick();
+    }
   }
 
   /** Notes a failed attempt; the order stays open so the shopper can pay again. */
   async markFailed(razorpayOrderId: string, reason: string | null, raw?: Prisma.InputJsonValue) {
     const payment = await this.prisma.payment.findUnique({ where: { razorpayOrderId } });
     if (!payment) return;
-    await this.prisma.$transaction([
-      this.prisma.payment.updateMany({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.updateMany({
         where: { id: payment.id, status: { in: ['CREATED', 'AUTHORIZED'] } },
         data: { status: 'FAILED', raw },
-      }),
-      this.prisma.orderEvent.create({
+      });
+      await tx.orderEvent.create({
         data: {
           orderId: payment.orderId,
           type: 'payment_failed',
           message: `Payment attempt failed${reason ? `: ${reason}` : ''}`,
         },
-      }),
-    ]);
+      });
+      const order = await tx.order.findUniqueOrThrow({
+        where: { id: payment.orderId },
+        select: { status: true },
+      });
+      // Once per order: how to try again while the items are still held.
+      if (order.status === 'PENDING_PAYMENT') {
+        await this.outbox.queueForOrder(tx, 'payment_failed', payment.orderId);
+      }
+    });
+    this.outbox.kick();
   }
 
   /** Cancels an unpaid order and gives back its held stock and coupon use. */
@@ -416,6 +465,29 @@ export class OrderService {
     return this.toDto(order);
   }
 
+  /** The public tracking page: the order number and the phone number it was placed with. */
+  async track(number: string, phone: string): Promise<TrackingDto> {
+    const order = await this.prisma.order.findUnique({ where: { number }, include: orderInclude });
+    if (!order || order.phone !== phone) {
+      throw new HttpError(
+        404,
+        'We could not find an order with that number and phone number',
+        'not_found',
+      );
+    }
+    const dto = this.toDto(order);
+    const events = order.shipments[0]?.events;
+    return {
+      number: dto.number,
+      status: dto.status,
+      placedAt: dto.placedAt,
+      items: dto.items,
+      shipment: dto.shipment,
+      scans: (Array.isArray(events) ? events : []) as unknown as TrackingScanDto[],
+      timeline: dto.timeline,
+    };
+  }
+
   private ownedBy(customer: CustomerDto): Prisma.OrderWhereInput {
     return { OR: [{ customerId: customer.id }, { email: customer.email }] };
   }
@@ -449,6 +521,8 @@ export class OrderService {
       total: o.total,
       couponCode: o.couponCode,
       shippingAddress: o.shippingAddress as unknown as AddressFields,
+      shipment: shipmentDto(o.shipments[0]),
+      timeline: timeline(o.events),
     };
   }
 
@@ -498,4 +572,28 @@ export class OrderService {
       data: { customerId: customer.id, ...a, isDefault: saved.length === 0 },
     });
   }
+}
+
+function shipmentDto(s: OrderWithItems['shipments'][number] | undefined): ShipmentDto | null {
+  if (!s) return null;
+  return {
+    status: s.status,
+    courier: s.courier,
+    awb: s.awb,
+    trackingUrl: s.trackingUrl,
+    estimatedDelivery: s.estimatedDelivery?.toISOString() ?? null,
+  };
+}
+
+/** Customer-facing milestones, oldest first, each shown once. */
+function timeline(events: { type: string; createdAt: Date }[]): TimelineEntryDto[] {
+  const seen = new Set<string>();
+  const entries: TimelineEntryDto[] = [];
+  for (const e of events) {
+    const label = TIMELINE_LABELS[e.type];
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    entries.push({ at: e.createdAt.toISOString(), label });
+  }
+  return entries;
 }

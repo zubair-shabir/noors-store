@@ -12,9 +12,11 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { issueText } from '@/lib/cart-issues';
 import { useShop } from '@/lib/cart-store';
+import { useDelivery } from '@/lib/delivery';
 import { openRazorpay } from '@/lib/razorpay';
 import { errorMessage, ShopError, shopFetch } from '@/lib/shop-api';
 import { AddressForm, emptyAddress, type AddressDraft } from './AddressForm';
+import { DeliveryNote } from './DeliveryCheck';
 import {
   errorText,
   labelClass,
@@ -118,6 +120,7 @@ export function CheckoutView() {
   const busy = stage !== 'form';
 
   const fieldError = (path: string) => error?.fieldError(path);
+  const delivery = useDelivery(address.pincode.trim());
 
   const confirm = async (
     result: CheckoutResultDto,
@@ -379,6 +382,9 @@ export function CheckoutView() {
                 {fieldError('address.phone') ?? fieldError('address.pincode')}
               </p>
             )}
+          <p className="mt-3 min-h-5 text-xs" aria-live="polite">
+            <DeliveryNote delivery={delivery} />
+          </p>
           <div className="mt-6">
             <label htmlFor="order-notes" className={labelClass}>
               Note for us (optional)

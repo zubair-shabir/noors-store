@@ -9,6 +9,7 @@ const columnsFor = (navLinks: NavLink[]) => [
     links: [
       { href: '/about', label: 'About Us' },
       { href: '/contact', label: 'Contact Us' },
+      { href: '/track', label: 'Track Order' },
       { href: '/account', label: 'Account' },
       { href: '/terms', label: 'Terms' },
       { href: '/#faq', label: 'FAQ' },

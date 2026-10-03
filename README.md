@@ -51,6 +51,36 @@ for `https://<your API>/api/v1/webhooks/razorpay` with the events `payment.captu
 Sample coupons from the seed: `WINTER50` (50% off, up to ₹2,000), `WELCOME10` (10% off a
 first order) and `FLAT300` (₹300 off orders of ₹2,999 or more).
 
+## Shipping and emails
+
+Paid orders are booked with Shiprocket automatically: the API creates the Shiprocket order,
+assigns a courier and AWB, schedules the pickup and fetches the label, then marks the order
+Packed. A booking that fails is retried with backoff; after five failures the order is left
+for you and `ORDER_ALERT_EMAIL` gets an email saying why. To book by hand instead, set
+`{"autoShip": false}` on the `fulfilment` row of the `settings` table.
+
+Shiprocket's tracking webhook moves orders to Shipped, Out for delivery and Delivered and
+emails the shopper at each step. In Shiprocket (Settings > API > Webhooks) set the URL to
+`https://<your API>/api/v1/webhooks/courier` and a token of your choice, and put that token
+in `SHIPROCKET_WEBHOOK_TOKEN`. The path deliberately avoids the word "shiprocket", which
+their dashboard rejects in webhook URLs.
+
+Product and checkout pages show a delivery date for the shopper's pincode, checkout refuses
+pincodes no courier reaches, and anyone can follow an order at `/track` with its number and
+the phone number used at checkout.
+
+Emails (order confirmed, payment failed, shipped, out for delivery, delivered, new-order
+alert) are written to the `emails` table in the same transaction as the change they announce
+and sent by a background job through Resend, retrying failures up to five times. Sign-in
+codes are sent straight away. The domain in `EMAIL_FROM` must be verified in Resend.
+
+Without `SHIPROCKET_EMAIL`, development books made-up shipments: every pincode is served
+except ones starting with 9, Jammu and Kashmir gets 3 days and the rest 5. To move a test
+order along as the courier would, call
+`POST /api/v1/shipping/mock-track` with `{ "orderNumber", "accessToken", "status" }` (status
+`IN TRANSIT`, `OUT FOR DELIVERY`, `DELIVERED` or `RTO INITIATED`; the access token is the
+`key` in the order page link). Without `RESEND_API_KEY`, emails go to the API log.
+
 ## Dashboard
 
 Open <http://localhost:3000/admin>. The seed creates a development owner account:

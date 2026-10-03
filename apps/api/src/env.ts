@@ -34,6 +34,28 @@ const envSchema = z
       .string()
       .optional()
       .transform((v) => v || "Noor's <orders@noors.in>"),
+    /** Public address of the storefront, for links in emails. */
+    STORE_URL: z
+      .string()
+      .optional()
+      .transform((v) => (v || 'http://localhost:3000').replace(/\/+$/, ''))
+      .pipe(z.string().url()),
+    /** Gets an email for every new order and every shipment that needs a hand. */
+    ORDER_ALERT_EMAIL: optional,
+    /** Shiprocket API user (Settings > API in Shiprocket). Without it, shipping uses a stand-in. */
+    SHIPROCKET_EMAIL: optional,
+    SHIPROCKET_PASSWORD: optional,
+    /** Name of the pickup address in Shiprocket, and its pincode for delivery estimates. */
+    SHIPROCKET_PICKUP_LOCATION: z
+      .string()
+      .optional()
+      .transform((v) => v || 'Primary'),
+    SHIPROCKET_PICKUP_PINCODE: z
+      .string()
+      .optional()
+      .transform((v) => v || '190001'),
+    /** The token set on the tracking webhook in Shiprocket; sent back as x-api-key. */
+    SHIPROCKET_WEBHOOK_TOKEN: optional,
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;
@@ -42,6 +64,9 @@ const envSchema = z
       'RAZORPAY_KEY_SECRET',
       'RAZORPAY_WEBHOOK_SECRET',
       'RESEND_API_KEY',
+      'SHIPROCKET_EMAIL',
+      'SHIPROCKET_PASSWORD',
+      'SHIPROCKET_WEBHOOK_TOKEN',
     ] as const) {
       if (!env[key])
         ctx.addIssue({ code: 'custom', path: [key], message: 'Required in production' });

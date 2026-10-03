@@ -344,6 +344,7 @@ model Order {
   shipments       Shipment[]
   returns         ReturnRequest[]
   inventoryLogs   InventoryLog[]
+  emails          Email[]
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
@@ -464,10 +465,17 @@ model Shipment {
   trackingUrl          String?        @map("tracking_url")
   /// Tracking scans as received from Shiprocket.
   events               Json           @default("[]")
+  /// Courier's estimated delivery date, from the tracking feed.
+  estimatedDelivery    DateTime?      @map("estimated_delivery")
+  /// Booking attempts with Shiprocket; booking stops retrying after a few failures.
+  attempts             Int            @default(0)
+  lastError            String?        @map("last_error")
+  nextAttemptAt        DateTime?      @map("next_attempt_at")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
   @@index([orderId])
+  @@index([status, nextAttemptAt])
   @@map("shipments")
 }
 
@@ -643,4 +651,37 @@ model Setting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+enum EmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+/// Outbox of customer and staff emails. Rows are written in the same transaction as the
+/// change they describe, then sent by a background worker with retries.
+model Email {
+  id        String      @id @default(cuid())
+  /// e.g. "order_confirmed:<order id>", so the same email is never queued twice.
+  dedupeKey String?     @unique @map("dedupe_key")
+  kind      String
+  orderId   String?     @map("order_id")
+  order     Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  to        String
+  subject   String
+  html      String
+  text      String
+  status    EmailStatus @default(PENDING)
+  attempts  Int         @default(0)
+  lastError String?     @map("last_error")
+  sendAfter DateTime    @default(now()) @map("send_after")
+  sentAt    DateTime?   @map("sent_at")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@index([status, sendAfter])
+  @@index([orderId])
+  @@map("emails")
 }

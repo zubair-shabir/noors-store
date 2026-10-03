@@ -8,6 +8,8 @@ export class HttpError extends Error {
     public readonly status: number,
     message: string,
     public readonly code = 'error',
+    /** Field-level problems, shaped like validation issues so forms can show them in place. */
+    public readonly issues?: { path: (string | number)[]; message: string }[],
   ) {
     super(message);
   }
@@ -30,7 +32,9 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     }
   }
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    res.status(err.status).json({
+      error: { code: err.code, message: err.message, ...(err.issues && { issues: err.issues }) },
+    });
     return;
   }
   logger.error({ err }, 'Unhandled error');

@@ -44,8 +44,8 @@ export interface StoreRouterOptions {
   gateway: PaymentGateway;
   allowedOrigins: string[];
   secureCookies: boolean;
-  /** Requests per IP per 15 minutes for sign-in codes and for checkout. */
-  rateLimits?: { otp?: number; checkout?: number };
+  /** Requests per IP per 15 minutes for sign-in codes, checkout and order tracking. */
+  rateLimits?: { otp?: number; checkout?: number; track?: number };
 }
 
 const limiter = (limit: number, message: string) =>

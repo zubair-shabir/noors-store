@@ -10,7 +10,10 @@ import { AddressForm, emptyAddress, type AddressDraft } from './AddressForm';
 import { errorText, primaryButton, secondaryButton, textButton } from './form';
 import { SignInForm } from './SignInForm';
 
-const dateFormat = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' });
+const dateFormat = new Intl.DateTimeFormat('en-IN', {
+  dateStyle: 'medium',
+  timeZone: 'Asia/Kolkata',
+});
 
 /** Sign-in when signed out; order history and saved addresses when signed in. */
 export function AccountView() {
