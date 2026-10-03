@@ -5,20 +5,19 @@ import { createProduct, resetDatabase, testPrisma } from '../../../test/db.js';
 import { createApp } from '../../app.js';
 import { LogEmailSender } from '../../lib/email.js';
 import { MockGateway } from '../../lib/payments.js';
-import { CartService } from './cart.service.js';
-import { OrderService } from './orders.service.js';
+import { createServices } from '../../services.js';
 
 const prisma = testPrisma();
 const gateway = new MockGateway();
 const email = new LogEmailSender();
+const services = createServices({ prisma, paymentGateway: gateway, emailSender: email });
 const app = createApp({
   corsOrigins: ['http://localhost:3000'],
   prisma,
-  paymentGateway: gateway,
-  emailSender: email,
+  services,
   storeRateLimits: { otp: 1000, checkout: 1000 },
 });
-const orders = new OrderService(prisma, new CartService(prisma), gateway);
+const { orders } = services;
 
 const address = {
   name: 'Zoya Mir',

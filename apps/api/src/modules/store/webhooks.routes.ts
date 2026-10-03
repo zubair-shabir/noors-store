@@ -5,6 +5,7 @@ import { HttpError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import type { PaymentGateway } from '../../lib/payments.js';
 import type { PrismaClient } from '../../lib/prisma.js';
+import type { CourierUpdate, FulfilmentService } from '../shipping/fulfilment.service.js';
 import type { OrderService } from './orders.service.js';
 
 interface RazorpayPayment {
@@ -32,9 +33,25 @@ export function webhooksRouter(opts: {
   prisma: PrismaClient;
   orders: OrderService;
   gateway: PaymentGateway;
+  fulfilment: FulfilmentService;
 }): Router {
-  const { prisma, orders, gateway } = opts;
+  const { prisma, orders, gateway, fulfilment } = opts;
   const router = Router();
+
+  /**
+   * Shiprocket tracking updates. The path can't mention Shiprocket (their dashboard rejects
+   * such URLs), and they authenticate with the token set there, sent as x-api-key.
+   */
+  router.post('/courier', express.json({ limit: '256kb' }), async (req, res) => {
+    if (!fulfilment.verifyWebhook(req.get('x-api-key') ?? '')) {
+      throw new HttpError(401, 'Invalid token', 'unauthorized');
+    }
+    const update = (req.body ?? {}) as CourierUpdate;
+    const known = await fulfilment.applyTracking(update);
+    if (!known) logger.info({ awb: update.awb }, 'Tracking update for an unknown AWB');
+    // Always 200 for a valid token, or Shiprocket keeps retrying and may disable the hook.
+    res.json({ status: 'ok' });
+  });
 
   router.post('/razorpay', express.raw({ type: '*/*', limit: '256kb' }), async (req, res) => {
     const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);

@@ -4,24 +4,23 @@ import express, { type Express } from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { errorHandler, notFound } from './lib/errors.js';
-import { LogEmailSender, type EmailSender } from './lib/email.js';
 import { logger } from './lib/logger.js';
-import { MockGateway, type PaymentGateway } from './lib/payments.js';
 import type { PrismaClient } from './lib/prisma.js';
 import { adminRouter, bannersRouter } from './modules/admin/admin.routes.js';
 import { LocalImageStore, type ImageStore } from './modules/admin/uploads.service.js';
 import { catalogRouter } from './modules/catalog/catalog.routes.js';
 import { CatalogService } from './modules/catalog/catalog.service.js';
-import { CartService } from './modules/store/cart.service.js';
-import { CustomerAuthService } from './modules/store/customer-auth.service.js';
-import { OrderService } from './modules/store/orders.service.js';
+import { shippingRouter } from './modules/shipping/shipping.routes.js';
 import { storeRouter, type StoreRouterOptions } from './modules/store/store.routes.js';
 import { webhooksRouter } from './modules/store/webhooks.routes.js';
 import { healthRouter } from './routes/health.js';
+import { createServices, type ServiceOptions, type Services } from './services.js';
 
-export interface AppOptions {
+export interface AppOptions extends Omit<ServiceOptions, 'prisma'> {
   corsOrigins: string[];
   prisma: PrismaClient;
+  /** Prebuilt services (so background jobs share them); built from the options otherwise. */
+  services?: Services;
   /** Where admin uploads go. Defaults to a local folder served at /uploads. */
   imageStore?: ImageStore;
   /** Folder for the local image store (and the /uploads route). */
@@ -29,10 +28,6 @@ export interface AppOptions {
   /** Send the admin session cookie over HTTPS only. On in production. */
   secureCookies?: boolean;
   loginRateLimit?: number;
-  /** Razorpay, or a stand-in that signs its own payments (development and tests). */
-  paymentGateway?: PaymentGateway;
-  /** Sends sign-in codes. Defaults to writing them to the log. */
-  emailSender?: EmailSender;
   storeRateLimits?: StoreRouterOptions['rateLimits'];
 }
 
@@ -43,13 +38,13 @@ export function createApp({
   uploadsDir = 'uploads',
   secureCookies = false,
   loginRateLimit,
-  paymentGateway = new MockGateway(),
-  emailSender = new LogEmailSender(),
   storeRateLimits,
+  services,
+  ...serviceOptions
 }: AppOptions): Express {
   const app = express();
-  const carts = new CartService(prisma);
-  const orders = new OrderService(prisma, carts, paymentGateway);
+  const { carts, auth, orders, fulfilment, paymentGateway } =
+    services ?? createServices({ prisma, ...serviceOptions });
 
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -58,7 +53,10 @@ export function createApp({
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(pinoHttp({ logger }));
   // Webhooks read the raw body to check its signature, so they come before the JSON parser.
-  app.use('/api/v1/webhooks', webhooksRouter({ prisma, orders, gateway: paymentGateway }));
+  app.use(
+    '/api/v1/webhooks',
+    webhooksRouter({ prisma, orders, gateway: paymentGateway, fulfilment }),
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
@@ -72,6 +70,10 @@ export function createApp({
   );
   app.use('/api/v1', catalogRouter(new CatalogService(prisma)));
   app.use('/api/v1/banners', bannersRouter(prisma));
+  app.use(
+    '/api/v1',
+    shippingRouter({ prisma, orders, fulfilment, trackLimit: storeRateLimits?.track }),
+  );
   app.use(
     '/api/v1/admin',
     adminRouter({
@@ -88,7 +90,7 @@ export function createApp({
     storeRouter({
       prisma,
       carts,
-      auth: new CustomerAuthService(prisma, emailSender),
+      auth,
       orders,
       gateway: paymentGateway,
       allowedOrigins: corsOrigins,

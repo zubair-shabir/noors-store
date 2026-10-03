@@ -12,6 +12,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useShop } from '@/lib/cart-store';
 import { errorMessage } from '@/lib/shop-api';
 import { useUi } from '@/lib/ui-store';
+import { DeliveryCheck } from '@/components/shop/DeliveryCheck';
 import { ProductGallery } from './ProductGallery';
 import {
   choose,
@@ -192,6 +193,7 @@ export function ProductView({ product }: { product: ProductDetailDto }) {
         >
           Buy now
         </button>
+        <DeliveryCheck />
 
         <div className="mt-10 border-t border-line">
           {product.description && (

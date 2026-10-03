@@ -1,7 +1,12 @@
 import { orderStatusLabel, type OrderDto } from '@noors/shared';
 import { OrderLines, Totals } from './OrderLines';
+import { ShipmentSummary, Timeline } from './ShipmentTracking';
 
-const dateFormat = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const dateFormat = new Intl.DateTimeFormat('en-IN', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Kolkata',
+});
 
 /** Items, totals, address and status of one order. */
 export function OrderDetail({ order }: { order: OrderDto }) {
@@ -38,6 +43,8 @@ export function OrderDetail({ order }: { order: OrderDto }) {
           <dt className="text-[11px] font-semibold tracking-[0.14em] uppercase">Placed</dt>
           <dd className="mt-2">{dateFormat.format(new Date(order.placedAt ?? order.createdAt))}</dd>
         </div>
+        <ShipmentSummary shipment={order.shipment} />
+        <Timeline entries={order.timeline} />
         <div>
           <dt className="text-[11px] font-semibold tracking-[0.14em] uppercase">Delivering to</dt>
           <dd className="mt-2 leading-relaxed">

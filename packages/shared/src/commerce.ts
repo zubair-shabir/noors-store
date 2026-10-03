@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Paise } from './money.js';
 import { phoneSchema, pincodeSchema } from './schemas.js';
+import type { ShipmentDto, TimelineEntryDto } from './shipping.js';
 
 // ─── Cart ───────────────────────────────────────────────────────────────────
 
@@ -263,4 +264,6 @@ export interface OrderDto extends Omit<OrderSummaryDto, 'firstImage'> {
   shippingFee: Paise;
   couponCode: string | null;
   shippingAddress: AddressFields;
+  shipment: ShipmentDto | null;
+  timeline: TimelineEntryDto[];
 }

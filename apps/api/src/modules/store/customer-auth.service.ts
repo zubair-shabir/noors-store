@@ -3,6 +3,7 @@ import type { CustomerDto } from '@noors/shared';
 import type { EmailSender } from '../../lib/email.js';
 import { HttpError } from '../../lib/errors.js';
 import type { PrismaClient } from '../../lib/prisma.js';
+import { signInCode } from '../notify/templates.js';
 import { hashToken } from './cart.service.js';
 
 export const CUSTOMER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -27,6 +28,7 @@ export class CustomerAuthService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly email: EmailSender,
+    private readonly storeUrl: string,
   ) {}
 
   /** Emails a fresh code. Returns the code itself only when email isn't really sent (dev). */
@@ -50,11 +52,8 @@ export class CustomerAuthService {
         expiresAt: new Date(Date.now() + CODE_TTL_MS),
       },
     });
-    await this.email.send({
-      to: email,
-      subject: `${code} is your Noor's sign-in code`,
-      text: `Your Noor's sign-in code is ${code}.\n\nIt expires in 10 minutes. If you didn't ask for it, you can ignore this email.`,
-    });
+    // Sent straight away rather than through the outbox: the shopper is waiting for it.
+    await this.email.send({ to: email, ...signInCode(this.storeUrl, code) });
     return {
       expiresIn: CODE_TTL_MS / 1000,
       ...(this.email.delivers ? {} : { devCode: code }),
