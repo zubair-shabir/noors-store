@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Paise } from './money.js';
 import { phoneSchema, pincodeSchema } from './schemas.js';
+import type { PaymentMethod, ReturnSummaryDto } from './operations.js';
 import type { ShipmentDto, TimelineEntryDto } from './shipping.js';
 
 // ─── Cart ───────────────────────────────────────────────────────────────────
@@ -167,6 +168,8 @@ export const checkoutInputSchema = z.object({
   address: addressFields,
   /** Signed-in shoppers only: keep this address for next time. */
   saveAddress: z.boolean().default(false),
+  /** Cash on delivery, when the store has it switched on. */
+  paymentMethod: z.enum(['RAZORPAY', 'COD']).default('RAZORPAY'),
   notes: z
     .string()
     .trim()
@@ -191,8 +194,9 @@ export interface CheckoutResultDto {
   orderNumber: string;
   /** Secret for the order's confirmation link; lets a guest view the order. */
   accessToken: string;
-  expiresAt: string;
-  payment: PaymentSessionDto;
+  expiresAt: string | null;
+  /** Null for cash on delivery: the order is placed straight away. */
+  payment: PaymentSessionDto | null;
 }
 
 export const paymentVerifySchema = z.object({
@@ -233,6 +237,7 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
 };
 
 export interface OrderItemDto {
+  id: string;
   name: string;
   title: string;
   sku: string;
@@ -264,6 +269,10 @@ export interface OrderDto extends Omit<OrderSummaryDto, 'firstImage'> {
   shippingFee: Paise;
   couponCode: string | null;
   shippingAddress: AddressFields;
+  paymentMethod: PaymentMethod;
   shipment: ShipmentDto | null;
   timeline: TimelineEntryDto[];
+  returns: ReturnSummaryDto[];
+  /** Until when a return or exchange can be asked for; null when it can't (not delivered yet, or the window passed). */
+  returnableUntil: string | null;
 }

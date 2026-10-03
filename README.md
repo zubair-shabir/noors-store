@@ -48,6 +48,10 @@ real Razorpay test mode, add your test keys, then add a webhook in the Razorpay 
 for `https://<your API>/api/v1/webhooks/razorpay` with the events `payment.captured`,
 `payment.failed` and `refund.processed`, and put its secret in `RAZORPAY_WEBHOOK_SECRET`.
 
+Cash on delivery is off until an owner turns it on in Settings, with an optional COD charge.
+A COD order is confirmed straight away, booked with Shiprocket as cash to collect, and counted
+paid when the courier delivers it.
+
 Sample coupons from the seed: `WINTER50` (50% off, up to ₹2,000), `WELCOME10` (10% off a
 first order) and `FLAT300` (₹300 off orders of ₹2,999 or more).
 
@@ -56,8 +60,9 @@ first order) and `FLAT300` (₹300 off orders of ₹2,999 or more).
 Paid orders are booked with Shiprocket automatically: the API creates the Shiprocket order,
 assigns a courier and AWB, schedules the pickup and fetches the label, then marks the order
 Packed. A booking that fails is retried with backoff; after five failures the order is left
-for you and `ORDER_ALERT_EMAIL` gets an email saying why. To book by hand instead, set
-`{"autoShip": false}` on the `fulfilment` row of the `settings` table.
+for you and `ORDER_ALERT_EMAIL` gets an email saying why. To book by hand instead, turn off
+automatic shipping in the dashboard's Settings; each order then has a Book with Shiprocket
+button.
 
 Shiprocket's tracking webhook moves orders to Shipped, Out for delivery and Delivered and
 emails the shopper at each step. In Shiprocket (Settings > API > Webhooks) set the URL to
@@ -93,6 +98,31 @@ ADMIN_PASSWORD='a long password' pnpm --filter @noors/api admin:create --email y
 ```
 
 Running it again for the same email resets the password and signs that account out everywhere.
+After that, owners add staff from the dashboard's Staff page.
+
+What each role sees:
+
+- **Staff:** orders (notes, booking, marking shipped or delivered, invoices), returns (approve,
+  receive, complete without a refund), customers, stock adjustments and the stock history.
+- **Owners:** everything, plus the dashboard's sales report, refunds, cancelling paid orders,
+  coupons, products and prices, settings and staff accounts.
+
+Refunds go back through Razorpay, in part or in full. Cancelling a paid order cancels its
+Shiprocket booking, puts the items back in stock, returns the coupon use and refunds the
+shopper. Cash on delivery orders are refunded outside the store, by bank transfer or UPI.
+
+Shoppers ask for a return or an exchange from their order page or the tracking page, within
+the window set in Settings (7 days after delivery by default). Each step emails them, and
+completing a return can restock the items and refund the shopper in one go.
+
+Anyone can turn on two-factor sign-in under Your account, with any authenticator app.
+Two-factor keys are encrypted with `APP_SECRET`, which production requires; changing it turns
+two-factor off for everyone. An owner can turn it off for someone who lost their phone.
+
+Store details (name, GSTIN and address for invoices), shipping charges, cash on delivery, the
+return window, automatic booking and the low-stock threshold are all in Settings. API keys
+for Razorpay, Shiprocket, Resend and Cloudinary stay in `apps/api/.env`; Settings only shows
+whether each is connected.
 
 Product photos upload to Cloudinary when `CLOUDINARY_URL` is set in `apps/api/.env`; without it
 they are saved to `apps/api/uploads` and served at `/uploads`.

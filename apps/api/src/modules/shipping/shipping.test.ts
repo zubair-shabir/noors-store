@@ -87,7 +87,7 @@ async function paidOrder() {
   const { agent, res } = await placeOrder();
   expect(res.status, JSON.stringify(res.body)).toBe(201);
   const result = res.body as CheckoutResultDto;
-  const signed = gateway.pay(result.payment.razorpayOrderId);
+  const signed = gateway.pay(result.payment!.razorpayOrderId);
   const paid = await agent
     .post('/api/v1/checkout/verify')
     .send({ orderNumber: result.orderNumber, ...signed });
@@ -327,9 +327,9 @@ describe('emails', () => {
   it('queues order emails once and retries failed sends', async () => {
     const { result } = await paidOrder();
     // The checkout page and the webhook both confirm; still one of each.
-    const signed = gateway.pay(result.payment.razorpayOrderId);
+    const signed = gateway.pay(result.payment!.razorpayOrderId);
     await services.orders.markPaid({
-      razorpayOrderId: result.payment.razorpayOrderId,
+      razorpayOrderId: result.payment!.razorpayOrderId,
       razorpayPaymentId: signed.razorpayPaymentId,
       source: 'webhook',
     });
@@ -373,8 +373,8 @@ describe('emails', () => {
   it('emails the shopper once when a payment attempt fails', async () => {
     const { res } = await placeOrder();
     const result = res.body as CheckoutResultDto;
-    await services.orders.markFailed(result.payment.razorpayOrderId, 'Card declined');
-    await services.orders.markFailed(result.payment.razorpayOrderId, 'Card declined');
+    await services.orders.markFailed(result.payment!.razorpayOrderId, 'Card declined');
+    await services.orders.markFailed(result.payment!.razorpayOrderId, 'Card declined');
     const rows = await prisma.email.findMany();
     expect(rows.map((r) => r.kind)).toEqual(['payment_failed']);
     expect(rows[0]!.to).toBe('zoya@example.com');

@@ -14,6 +14,7 @@ export interface ShipmentRequest {
   customer: { name: string; email: string; phone: string };
   address: { line1: string; line2: string | null; city: string; state: string; pincode: string };
   items: { name: string; sku: string; units: number; sellingPrice: number; hsn: string | null }[];
+  paymentMethod: 'Prepaid' | 'COD';
   subTotal: number;
   discount: number;
   shippingCharges: number;
@@ -29,6 +30,8 @@ export interface ShippingProvider {
   schedulePickup(shipmentId: string): Promise<void>;
   /** URL of the printable shipping label, when the courier has one. */
   label(shipmentId: string): Promise<string | null>;
+  /** Cancels a Shiprocket order (before pickup). */
+  cancelOrder(shiprocketOrderId: string): Promise<void>;
   /** Checks the token Shiprocket sends with tracking webhooks. */
   verifyWebhook(token: string): boolean;
 }
@@ -117,7 +120,7 @@ export class ShiprocketProvider implements ShippingProvider {
           selling_price: i.sellingPrice,
           hsn: i.hsn ?? '',
         })),
-        payment_method: 'Prepaid',
+        payment_method: req.paymentMethod,
         sub_total: req.subTotal,
         total_discount: req.discount,
         shipping_charges: req.shippingCharges,
@@ -153,6 +156,10 @@ export class ShiprocketProvider implements ShippingProvider {
       { shipment_id: [shipmentId] },
     );
     return body.label_url || null;
+  }
+
+  async cancelOrder(shiprocketOrderId: string) {
+    await this.call('POST', '/orders/cancel', { ids: [Number(shiprocketOrderId)] });
   }
 
   verifyWebhook(token: string) {
@@ -244,6 +251,13 @@ export class MockShippingProvider implements ShippingProvider {
 
   async label() {
     return null;
+  }
+
+  /** Shiprocket order ids cancelled so far, for tests. */
+  readonly cancelled: string[] = [];
+
+  async cancelOrder(shiprocketOrderId: string) {
+    this.cancelled.push(shiprocketOrderId);
   }
 
   verifyWebhook(token: string) {

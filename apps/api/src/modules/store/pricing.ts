@@ -1,6 +1,7 @@
 import { formatINR } from '@noors/shared';
 import type { Coupon } from '../../generated/prisma/client.js';
 import type { PrismaClient } from '../../lib/prisma.js';
+import { DEFAULT_SETTINGS, loadSetting } from '../settings/settings.service.js';
 
 export interface ShippingSettings {
   /** Charged when the order is below `freeFrom`, in paise. */
@@ -9,21 +10,11 @@ export interface ShippingSettings {
   freeFrom: number | null;
 }
 
-export const DEFAULT_SHIPPING: ShippingSettings = { flatFee: 9900, freeFrom: 199900 };
+export const DEFAULT_SHIPPING: ShippingSettings = DEFAULT_SETTINGS.shipping;
 
 /** Shipping charges from the settings table (`shipping`), falling back to the defaults. */
-export async function shippingSettings(prisma: PrismaClient): Promise<ShippingSettings> {
-  const row = await prisma.setting.findUnique({ where: { key: 'shipping' } });
-  const value = (row?.value ?? {}) as Partial<ShippingSettings>;
-  return {
-    flatFee: Number.isInteger(value.flatFee) ? value.flatFee! : DEFAULT_SHIPPING.flatFee,
-    freeFrom:
-      value.freeFrom === null
-        ? null
-        : Number.isInteger(value.freeFrom)
-          ? value.freeFrom!
-          : DEFAULT_SHIPPING.freeFrom,
-  };
+export function shippingSettings(prisma: PrismaClient): Promise<ShippingSettings> {
+  return loadSetting(prisma, 'shipping');
 }
 
 export interface CouponContext {

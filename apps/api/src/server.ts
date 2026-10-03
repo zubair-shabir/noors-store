@@ -41,6 +41,7 @@ const services = createServices({
   storeUrl: env.STORE_URL,
   alertEmail: env.ORDER_ALERT_EMAIL,
   autoDispatch: true,
+  appSecret: env.APP_SECRET,
 });
 
 const app = createApp({

@@ -1,4 +1,9 @@
-import { orderAccessSchema, serviceabilityQuerySchema, trackQuerySchema } from '@noors/shared';
+import {
+  orderAccessSchema,
+  returnRequestSchema,
+  serviceabilityQuerySchema,
+  trackQuerySchema,
+} from '@noors/shared';
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
@@ -6,6 +11,7 @@ import { HttpError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import type { PrismaClient } from '../../lib/prisma.js';
 import type { OrderService } from '../store/orders.service.js';
+import type { ReturnService } from '../store/returns.service.js';
 import type { FulfilmentService } from './fulfilment.service.js';
 
 const mockTrackSchema = orderAccessSchema.extend({
@@ -17,11 +23,20 @@ export function shippingRouter(opts: {
   prisma: PrismaClient;
   orders: OrderService;
   fulfilment: FulfilmentService;
+  returns: ReturnService;
   /** Tracking lookups per IP per 15 minutes. */
   trackLimit?: number;
 }): Router {
   const { prisma, orders, fulfilment } = opts;
   const router = Router();
+  const trackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: opts.trackLimit ?? 30,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: (_req, _res, next) =>
+      next(new HttpError(429, 'Too many lookups. Try again in a few minutes.', 'rate_limited')),
+  });
 
   router.get('/shipping/serviceability', async (req, res) => {
     const { pincode } = serviceabilityQuerySchema.parse(req.query);
@@ -35,22 +50,24 @@ export function shippingRouter(opts: {
     }
   });
 
-  router.get(
-    '/track',
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: opts.trackLimit ?? 30,
-      standardHeaders: 'draft-8',
-      legacyHeaders: false,
-      handler: (_req, _res, next) =>
-        next(new HttpError(429, 'Too many lookups. Try again in a few minutes.', 'rate_limited')),
-    }),
-    async (req, res) => {
-      const { order, phone } = trackQuerySchema.parse(req.query);
-      res.set('Cache-Control', 'no-store');
-      res.json(await orders.track(order, phone));
-    },
-  );
+  router.get('/track', trackLimiter, async (req, res) => {
+    const { order, phone } = trackQuerySchema.parse(req.query);
+    res.set('Cache-Control', 'no-store');
+    res.json(await orders.track(order, phone));
+  });
+
+  // Returns from the tracking page: the order number and phone stand in for a sign-in.
+  router.post('/track/returns', trackLimiter, async (req, res) => {
+    const { order: number, phone } = trackQuerySchema.parse(req.body);
+    const tracked = await orders.track(number, phone);
+    const { id } = await prisma.order.findUniqueOrThrow({
+      where: { number: tracked.number },
+      select: { id: true },
+    });
+    await opts.returns.request(id, returnRequestSchema.parse(req.body));
+    res.set('Cache-Control', 'no-store');
+    res.json(await orders.track(number, phone));
+  });
 
   // Development stand-in for the courier: moves a mock shipment along, as tracking would.
   if (fulfilment.mode === 'mock') {

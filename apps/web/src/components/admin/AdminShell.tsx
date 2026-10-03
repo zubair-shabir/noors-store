@@ -2,13 +2,22 @@
 
 import type { AdminMeDto } from '@noors/shared';
 import {
+  Boxes,
   FolderTree,
   Image as ImageIcon,
+  LayoutDashboard,
   Layers,
   LogOut,
   Menu,
   Package,
+  Receipt,
+  Settings,
+  ShieldCheck,
   Star,
+  TicketPercent,
+  Undo2,
+  UserCog,
+  Users,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -30,12 +39,23 @@ export function useAdmin(): AdminMeDto {
 export const useIsOwner = () => useAdmin().role === 'OWNER';
 
 const nav = [
+  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, ownerOnly: true },
+  { href: '/admin/orders', label: 'Orders', icon: Receipt },
+  { href: '/admin/returns', label: 'Returns', icon: Undo2 },
+  { href: '/admin/customers', label: 'Customers', icon: Users },
+  { href: '/admin/inventory', label: 'Inventory', icon: Boxes },
+  { href: '/admin/coupons', label: 'Coupons', icon: TicketPercent, ownerOnly: true },
+  { section: 'Catalogue' },
   { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/categories', label: 'Categories', icon: FolderTree },
   { href: '/admin/collections', label: 'Collections', icon: Layers },
   { href: '/admin/featured', label: 'Featured', icon: Star },
   { href: '/admin/banners', label: 'Home banners', icon: ImageIcon },
-];
+  { section: 'Store' },
+  { href: '/admin/settings', label: 'Settings', icon: Settings, ownerOnly: true },
+  { href: '/admin/staff', label: 'Staff', icon: UserCog, ownerOnly: true },
+  { href: '/admin/account', label: 'Your account', icon: ShieldCheck },
+] as const;
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -51,9 +71,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   if (!data) return <Spinner label="Checking your session" />;
 
   const sidebar = (
-    <nav className="flex h-full flex-col gap-1 p-4">
+    <nav className="flex h-full flex-col gap-1 overflow-y-auto p-4">
       <div className="mb-6 flex items-center justify-between px-2">
-        <Link href="/admin/products" aria-label="Dashboard home">
+        <Link href="/admin" aria-label="Dashboard home">
           <Logo />
         </Link>
         <button
@@ -65,7 +85,19 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <X className="size-5" />
         </button>
       </div>
-      {nav.map(({ href, label, icon: Icon }) => {
+      {nav.map((item) => {
+        if ('section' in item) {
+          return (
+            <p
+              key={item.section}
+              className="mt-4 mb-1 px-3 text-[11px] font-semibold tracking-[0.12em] text-muted uppercase"
+            >
+              {item.section}
+            </p>
+          );
+        }
+        const { href, label, icon: Icon } = item;
+        if ('ownerOnly' in item && item.ownerOnly && data.admin.role !== 'OWNER') return null;
         const active = pathname.startsWith(href);
         return (
           <Link

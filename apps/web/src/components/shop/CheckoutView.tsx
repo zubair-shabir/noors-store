@@ -4,6 +4,7 @@ import {
   formatINR,
   type AddressDto,
   type CartDto,
+  type CheckoutOptionsDto,
   type CheckoutResultDto,
   type OrderDto,
 } from '@noors/shared';
@@ -49,7 +50,8 @@ function readPending(): PendingOrder | null {
   try {
     const raw = sessionStorage.getItem(PENDING_KEY);
     const pending = raw ? (JSON.parse(raw) as PendingOrder) : null;
-    if (!pending || new Date(pending.result.expiresAt).getTime() < Date.now() + 60_000) return null;
+    const expires = pending?.result.expiresAt;
+    if (!pending || !expires || new Date(expires).getTime() < Date.now() + 60_000) return null;
     return pending;
   } catch {
     return null;
@@ -121,6 +123,21 @@ export function CheckoutView() {
 
   const fieldError = (path: string) => error?.fieldError(path);
   const delivery = useDelivery(address.pincode.trim());
+  const [method, setMethod] = useState<'RAZORPAY' | 'COD'>('RAZORPAY');
+  const [options, setOptions] = useState<CheckoutOptionsDto | null>(null);
+  useEffect(() => {
+    let live = true;
+    shopFetch<CheckoutOptionsDto>('/checkout/options').then(
+      (o) => live && setOptions(o),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const cod = options?.cod.enabled ? options.cod : null;
+  const payingCod = Boolean(cod) && method === 'COD';
+  const grandTotal = cart ? cart.total + (payingCod ? cod!.fee : 0) : 0;
 
   const confirm = async (
     result: CheckoutResultDto,
@@ -145,13 +162,21 @@ export function CheckoutView() {
   };
 
   const pay = async (result: CheckoutResultDto) => {
+    const payment = result.payment;
+    if (!payment) {
+      // Cash on delivery: the order is already placed.
+      writePending(null);
+      await load().catch(() => undefined);
+      router.replace(`/orders/${result.orderNumber}?key=${encodeURIComponent(result.accessToken)}`);
+      return;
+    }
     setStage('paying');
-    if (result.payment.mode === 'mock') {
+    if (payment.mode === 'mock') {
       setMock(result);
       return;
     }
     try {
-      const paid = await openRazorpay(result.payment, result.orderNumber, (m) => setMessage(m));
+      const paid = await openRazorpay(payment, result.orderNumber, (m) => setMessage(m));
       if (!paid) {
         setStage('form');
         setMessage('Payment was not completed. Your items are held for 30 minutes.');
@@ -174,7 +199,7 @@ export function CheckoutView() {
     setMessage(null);
     const fingerprint = fingerprintOf(cart, contactEmail, address);
     const pending = readPending();
-    if (pending?.fingerprint === fingerprint) {
+    if (pending?.fingerprint === fingerprint && !payingCod) {
       await pay(pending.result);
       return;
     }
@@ -195,9 +220,10 @@ export function CheckoutView() {
           address: { ...address, line2: address.line2 || undefined },
           saveAddress: Boolean(customer) && addressId === 'new' && saveAddress,
           notes: notes || undefined,
+          paymentMethod: payingCod ? 'COD' : 'RAZORPAY',
         },
       });
-      writePending({ result, fingerprint });
+      if (result.payment) writePending({ result, fingerprint });
       await pay(result);
     } catch (err) {
       setStage('form');
@@ -405,10 +431,51 @@ export function CheckoutView() {
           <h2 id="payment-heading" className="font-display text-2xl uppercase">
             Payment
           </h2>
-          <p className="mt-4 text-sm text-muted">
-            Pay securely with UPI, cards, net banking or wallets through Razorpay. We hold your
-            items for 30 minutes while you pay.
-          </p>
+          {cod ? (
+            <fieldset className="mt-4 space-y-3">
+              <legend className="sr-only">How would you like to pay?</legend>
+              {(
+                [
+                  [
+                    'RAZORPAY',
+                    'Pay online',
+                    'UPI, cards, net banking or wallets through Razorpay.',
+                  ],
+                  [
+                    'COD',
+                    'Cash on delivery',
+                    cod.fee > 0
+                      ? `Pay the courier when it arrives. ${formatINR(cod.fee)} COD charge.`
+                      : 'Pay the courier when it arrives.',
+                  ],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <label
+                  key={value}
+                  className={`flex cursor-pointer gap-3 border p-4 text-sm ${method === value ? 'border-foreground' : 'border-line'}`}
+                >
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    value={value}
+                    checked={method === value}
+                    onChange={() => setMethod(value)}
+                    disabled={busy}
+                    className="mt-0.5 accent-[var(--foreground)]"
+                  />
+                  <span>
+                    <span className="block font-medium">{label}</span>
+                    <span className="block text-muted">{hint}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : (
+            <p className="mt-4 text-sm text-muted">
+              Pay securely with UPI, cards, net banking or wallets through Razorpay. We hold your
+              items for 30 minutes while you pay.
+            </p>
+          )}
           {(formError || message) && (
             <p role="alert" className={`mt-5 ${formError ? errorText : 'text-sm'}`}>
               {formError ?? message}
@@ -421,7 +488,9 @@ export function CheckoutView() {
                 ? 'Waiting for payment…'
                 : stage === 'confirming'
                   ? 'Confirming your payment…'
-                  : `Pay ${formatINR(cart.total)}`}
+                  : payingCod
+                    ? `Place order · ${formatINR(grandTotal)}`
+                    : `Pay ${formatINR(cart.total)}`}
           </button>
           {!cart.ready && (
             <p className={`mt-3 ${errorText}`}>Some items in your bag need attention first.</p>
@@ -503,8 +572,8 @@ export function CheckoutView() {
             subtotal={cart.subtotal}
             discount={cart.discount}
             discountLabel={cart.coupon?.code}
-            shippingFee={cart.shippingFee}
-            total={cart.total}
+            shippingFee={cart.shippingFee + (payingCod ? cod!.fee : 0)}
+            total={grandTotal}
           />
         </div>
       </aside>
@@ -556,7 +625,7 @@ function MockPayment({
           Test payment
         </p>
         <h2 id="mock-pay-title" className="mt-2 font-display text-3xl uppercase">
-          {formatINR(result.payment.amount)}
+          {formatINR(result.payment?.amount ?? 0)}
         </h2>
         <p className="mt-3 text-sm text-muted">
           Razorpay keys are not set up yet, so this stands in for the Razorpay popup. No money
@@ -583,7 +652,7 @@ function MockPayment({
               }
             }}
           >
-            Pay {formatINR(result.payment.amount)}
+            Pay {formatINR(result.payment?.amount ?? 0)}
           </button>
           <button
             type="button"

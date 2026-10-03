@@ -8,7 +8,9 @@ import {
   otpRequestSchema,
   otpVerifySchema,
   paymentVerifySchema,
+  returnRequestSchema,
   type AddressDto,
+  type CheckoutOptionsDto,
   type CustomerDto,
 } from '@noors/shared';
 import type { CookieOptions, Request, RequestHandler, Response } from 'express';
@@ -21,7 +23,9 @@ import type { PrismaClient } from '../../lib/prisma.js';
 import { sameOriginOnly } from '../admin/auth.middleware.js';
 import type { CartOwner, CartService } from './cart.service.js';
 import type { CustomerAuthService } from './customer-auth.service.js';
+import { loadSetting } from '../settings/settings.service.js';
 import type { OrderService } from './orders.service.js';
+import type { ReturnService } from './returns.service.js';
 
 export const CART_COOKIE = 'noors_cart';
 export const CUSTOMER_COOKIE = 'noors_customer';
@@ -41,6 +45,7 @@ export interface StoreRouterOptions {
   carts: CartService;
   auth: CustomerAuthService;
   orders: OrderService;
+  returns: ReturnService;
   gateway: PaymentGateway;
   allowedOrigins: string[];
   secureCookies: boolean;
@@ -244,6 +249,20 @@ export function storeRouter(opts: StoreRouterOptions): Router {
     res.json({ items: await orders.listForCustomer(req.customer!) });
   });
 
+  router.post('/me/orders/:number/returns', requireCustomer, async (req, res) => {
+    const { number } = numberParam.parse(req.params);
+    const order = await prisma.order.findFirst({
+      where: {
+        number,
+        OR: [{ customerId: req.customer!.id }, { email: req.customer!.email }],
+      },
+      select: { id: true },
+    });
+    if (!order) throw new HttpError(404, 'Order not found', 'not_found');
+    await opts.returns.request(order.id, returnRequestSchema.parse(req.body));
+    res.json(await orders.customerOrder(req.customer!, number));
+  });
+
   router.get('/me/orders/:number', requireCustomer, async (req, res) => {
     const { number } = numberParam.parse(req.params);
     res.json(await orders.customerOrder(req.customer!, number));
@@ -265,6 +284,11 @@ export function storeRouter(opts: StoreRouterOptions): Router {
       res.status(201).json(result);
     },
   );
+
+  router.get('/checkout/options', async (_req, res) => {
+    const cod = await loadSetting(prisma, 'cod');
+    res.json({ cod } satisfies CheckoutOptionsDto);
+  });
 
   router.post('/checkout/verify', async (req, res) => {
     res.json(await orders.verifyPayment(paymentVerifySchema.parse(req.body)));
@@ -294,6 +318,14 @@ export function storeRouter(opts: StoreRouterOptions): Router {
   router.get('/orders/:number', async (req, res) => {
     const { number } = numberParam.parse(req.params);
     const { key } = orderQuery.parse(req.query);
+    res.json(await orders.publicOrder(number, key));
+  });
+
+  router.post('/orders/:number/returns', async (req, res) => {
+    const { number } = numberParam.parse(req.params);
+    const { key } = orderQuery.parse(req.query);
+    const order = await orders.byAccessToken(number, key);
+    await opts.returns.request(order.id, returnRequestSchema.parse(req.body));
     res.json(await orders.publicOrder(number, key));
   });
 

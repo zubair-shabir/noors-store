@@ -56,6 +56,8 @@ const envSchema = z
       .transform((v) => v || '190001'),
     /** The token set on the tracking webhook in Shiprocket; sent back as x-api-key. */
     SHIPROCKET_WEBHOOK_TOKEN: optional,
+    /** Long random string that encrypts secrets kept in the database (two-factor keys). */
+    APP_SECRET: optional,
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;
@@ -67,6 +69,7 @@ const envSchema = z
       'SHIPROCKET_EMAIL',
       'SHIPROCKET_PASSWORD',
       'SHIPROCKET_WEBHOOK_TOKEN',
+      'APP_SECRET',
     ] as const) {
       if (!env[key])
         ctx.addIssue({ code: 'custom', path: [key], message: 'Required in production' });
