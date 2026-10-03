@@ -26,6 +26,7 @@ export function navLinksFor(categories: Pick<CategoryDto, 'slug' | 'name'>[]): N
 export const companyLinks: NavLink[] = [
   { href: '/about', label: 'About Us' },
   { href: '/contact', label: 'Contact Us' },
+  { href: '/account', label: 'Your Account' },
 ];
 
 /** Placeholder brand photography (About page, fallbacks). Replaced when real photos arrive. */

@@ -2,9 +2,11 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { formatINR, type ProductSummaryDto } from '@noors/shared';
-import { useCart } from '@/lib/cart-store';
+import { useShop } from '@/lib/cart-store';
+import { errorMessage } from '@/lib/shop-api';
 import { productHref } from '@/lib/site';
 import { useUi } from '@/lib/ui-store';
 
@@ -25,25 +27,30 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
   const options = product.quickAdd;
   const firstAvailable = options.find((o) => o.available) ?? options[0];
   const [variantId, setVariantId] = useState(firstAvailable?.variantId ?? '');
-  const add = useCart((s) => s.add);
+  const add = useShop((s) => s.add);
   const openPanel = useUi((s) => s.open);
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const sizeId = useId();
   const [front, back] = product.images;
   const href = productHref(product.slug);
   const chosen = options.find((o) => o.variantId === variantId);
   const canBuy = Boolean(chosen?.available);
 
-  const addToCart = () => {
-    if (!chosen || !chosen.available) return;
-    add({
-      variantId: chosen.variantId,
-      slug: product.slug,
-      name: product.name,
-      title: chosen.label,
-      image: front?.url ?? null,
-      price: chosen.price,
-    });
-    openPanel('cart');
+  const addToCart = async (then: 'cart' | 'checkout') => {
+    if (!chosen || !chosen.available || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await add(chosen.variantId);
+      if (then === 'checkout') router.push('/checkout');
+      else openPanel('cart');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -108,21 +115,30 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
             </select>
           </>
         )}
-        <button type="button" className={action} onClick={addToCart} disabled={!canBuy}>
+        <button
+          type="button"
+          className={action}
+          onClick={() => addToCart('cart')}
+          disabled={!canBuy || busy}
+        >
           {product.inStock ? 'Add to cart' : 'Sold out'}
         </button>
-        {/* Buy now goes straight to checkout once Step 6 lands; until then it opens the cart. */}
         {product.inStock && (
           <button
             type="button"
             className={`${action} no-underline`}
-            onClick={addToCart}
-            disabled={!canBuy}
+            onClick={() => addToCart('checkout')}
+            disabled={!canBuy || busy}
           >
             Buy now →
           </button>
         )}
       </div>
+      {error && (
+        <p role="alert" className="mt-2 text-xs">
+          {error}
+        </p>
+      )}
       <span
         aria-hidden="true"
         className="absolute bottom-0 left-0 h-[1.5px] w-full origin-left scale-x-0 bg-foreground transition-transform duration-700 ease-out-expo group-hover:scale-x-100"

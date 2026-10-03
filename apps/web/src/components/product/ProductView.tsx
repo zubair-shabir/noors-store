@@ -1,9 +1,16 @@
 'use client';
 
-import { formatINR, type ProductDetailDto, type SizeChartRow } from '@noors/shared';
+import {
+  formatINR,
+  MAX_LINE_QUANTITY,
+  type ProductDetailDto,
+  type SizeChartRow,
+} from '@noors/shared';
 import { Minus, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState, type ReactNode } from 'react';
-import { MAX_LINE_QUANTITY, useCart } from '@/lib/cart-store';
+import { useShop } from '@/lib/cart-store';
+import { errorMessage } from '@/lib/shop-api';
 import { useUi } from '@/lib/ui-store';
 import { ProductGallery } from './ProductGallery';
 import {
@@ -20,8 +27,11 @@ const label = 'text-[11px] font-semibold tracking-[0.14em] uppercase';
 export function ProductView({ product }: { product: ProductDetailDto }) {
   const [selection, setSelection] = useState(() => initialSelection(product));
   const [quantity, setQuantity] = useState(1);
-  const add = useCart((s) => s.add);
+  const add = useShop((s) => s.add);
   const openPanel = useUi((s) => s.open);
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const variant = findVariant(product, selection);
   const colourOption = product.options.find(isColourOption);
@@ -35,25 +45,19 @@ export function ProductView({ product }: { product: ProductDetailDto }) {
     return list.length ? list : product.images;
   }, [product.images, colourId]);
 
-  const title = product.options
-    .map((o) => o.values.find((v) => v.id === selection[o.name])?.value)
-    .filter(Boolean)
-    .join(' / ');
-
-  const addToCart = () => {
-    if (!variant?.available) return;
-    add(
-      {
-        variantId: variant.id,
-        slug: product.slug,
-        name: product.name,
-        title: title || 'One size',
-        image: images[0]?.url ?? null,
-        price: variant.price,
-      },
-      quantity,
-    );
-    openPanel('cart');
+  const addToCart = async (then: 'cart' | 'checkout') => {
+    if (!variant?.available || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await add(variant.id, quantity);
+      if (then === 'checkout') router.push('/checkout');
+      else openPanel('cart');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const price = variant?.price ?? product.price;
@@ -136,7 +140,11 @@ export function ProductView({ product }: { product: ProductDetailDto }) {
         </div>
 
         <p className="mt-6 min-h-5 text-xs" aria-live="polite">
-          {!variant || !variant.available ? (
+          {error ? (
+            <span role="alert" className="font-medium">
+              {error}
+            </span>
+          ) : !variant || !variant.available ? (
             <span className="text-muted">This combination is sold out.</span>
           ) : variant.lowStock ? (
             <span className="font-medium">Only a few left.</span>
@@ -169,18 +177,17 @@ export function ProductView({ product }: { product: ProductDetailDto }) {
           </div>
           <button
             type="button"
-            onClick={addToCart}
-            disabled={!variant?.available}
+            onClick={() => addToCart('cart')}
+            disabled={!variant?.available || busy}
             className="flex-1 border border-foreground py-3.5 text-[11px] font-semibold tracking-[0.18em] uppercase transition-colors hover:bg-foreground hover:text-background disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground"
           >
             {variant?.available ? 'Add to cart' : 'Sold out'}
           </button>
         </div>
-        {/* Buy now goes straight to checkout once Step 6 lands; until then it opens the cart. */}
         <button
           type="button"
-          onClick={addToCart}
-          disabled={!variant?.available}
+          onClick={() => addToCart('checkout')}
+          disabled={!variant?.available || busy}
           className="mt-3 w-full bg-foreground py-3.5 text-[11px] font-semibold tracking-[0.18em] text-background uppercase transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Buy now

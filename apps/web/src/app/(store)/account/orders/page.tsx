@@ -1,9 +1,6 @@
-import type { Metadata } from 'next';
-import { ComingSoon } from '@/components/ui/ComingSoon';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = { title: 'Orders' };
-
-// Order history and tracking arrive with customer accounts in Steps 6 and 7.
+// Order history lives on the account page.
 export default function OrdersPage() {
-  return <ComingSoon title="Orders" note="Order tracking is coming soon." />;
+  redirect('/account');
 }
