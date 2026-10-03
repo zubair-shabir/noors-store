@@ -14,6 +14,7 @@ import { errorMessage } from '@/lib/shop-api';
 import { useUi } from '@/lib/ui-store';
 import { DeliveryCheck } from '@/components/shop/DeliveryCheck';
 import { ProductGallery } from './ProductGallery';
+import { WishlistButton } from './WishlistButton';
 import {
   choose,
   findVariant,
@@ -184,6 +185,12 @@ export function ProductView({ product }: { product: ProductDetailDto }) {
           >
             {variant?.available ? 'Add to cart' : 'Sold out'}
           </button>
+          <WishlistButton
+            productId={product.id}
+            slug={product.slug}
+            name={product.name}
+            variant="page"
+          />
         </div>
         <button
           type="button"

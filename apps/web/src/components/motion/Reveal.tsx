@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { easeOutExpo } from '@/lib/motion';
 
@@ -16,7 +16,7 @@ interface RevealProps {
 /** Blur-to-sharp fade up when the element scrolls into view (images, headings and copy on the reference site). */
 export function Reveal({ children, className, delay = 0, y = 24, as = 'div' }: RevealProps) {
   const reduce = useReducedMotion();
-  const Tag = motion[as];
+  const Tag = m[as];
   return (
     <Tag
       className={className}

@@ -1,9 +1,18 @@
 'use client';
 
-import { formatINR, orderStatusLabel, type AddressDto, type OrderSummaryDto } from '@noors/shared';
+import {
+  formatINR,
+  orderStatusLabel,
+  type AddressDto,
+  type OrderSummaryDto,
+  type WishlistDto,
+  type WishlistItemDto,
+} from '@noors/shared';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { ProductCard } from '@/components/product/ProductCard';
 import { useShop } from '@/lib/cart-store';
 import { errorMessage, ShopError, shopFetch } from '@/lib/shop-api';
 import { AddressForm, emptyAddress, type AddressDraft } from './AddressForm';
@@ -15,9 +24,13 @@ const dateFormat = new Intl.DateTimeFormat('en-IN', {
   timeZone: 'Asia/Kolkata',
 });
 
-/** Sign-in when signed out; order history and saved addresses when signed in. */
-export function AccountView() {
+/**
+ * Sign-in when signed out; order history, saved addresses and the wishlist when signed in.
+ * `next` is a path on this site to return to after signing in (from a wishlist heart, say).
+ */
+export function AccountView({ next, intent }: { next?: string; intent?: 'wishlist' } = {}) {
   const { customer, loaded, signOut } = useShop();
+  const router = useRouter();
 
   if (!loaded) return <p className="py-32 text-center text-sm text-muted">Loading…</p>;
 
@@ -26,10 +39,15 @@ export function AccountView() {
       <div className="mx-auto max-w-md">
         <h1 className="font-display text-5xl uppercase sm:text-6xl">Sign in</h1>
         <p className="mt-4 text-sm text-muted">
+          {intent === 'wishlist' && (
+            <span className="mb-2 block font-medium text-foreground">
+              Sign in to save pieces to your wishlist.
+            </span>
+          )}
           No password needed. We email you a code. New here? Signing in creates your account.
         </p>
         <div className="mt-10">
-          <SignInForm />
+          <SignInForm onSignedIn={next ? () => router.replace(next) : undefined} />
         </div>
       </div>
     );
@@ -50,6 +68,7 @@ export function AccountView() {
         <Orders />
         <Addresses />
       </div>
+      <Wishlist />
     </div>
   );
 }
@@ -268,6 +287,84 @@ function Addresses() {
             ))}
           </ul>
         </>
+      )}
+    </section>
+  );
+}
+
+/** Saved products as product cards. Unsaving (heart or Remove) takes a card out straight away. */
+function Wishlist() {
+  const [items, setItems] = useState<WishlistItemDto[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const savedIds = useShop((s) => s.wishlist);
+  const idsReady = useShop((s) => s.wishlistOwner !== null);
+  const toggle = useShop((s) => s.toggleWishlist);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  useEffect(() => {
+    shopFetch<WishlistDto>('/me/wishlist')
+      .then((r) => setItems(r.items))
+      .catch((err) => setError(errorMessage(err)));
+  }, []);
+
+  // The store's ids are the live truth: a heart tapped anywhere updates this list.
+  const shown = items?.filter((i) => !idsReady || savedIds.includes(i.product.id)) ?? null;
+
+  const remove = async (productId: string) => {
+    setRemoving(productId);
+    setError(null);
+    try {
+      if (useShop.getState().wishlist.includes(productId)) await toggle(productId);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  return (
+    <section aria-labelledby="wishlist-heading" className="mt-20">
+      <h2 id="wishlist-heading" className="font-display text-2xl uppercase">
+        Wishlist
+        {shown && shown.length > 0 && (
+          <span className="ml-3 align-middle font-sans text-sm text-muted tabular-nums">
+            {shown.length}
+          </span>
+        )}
+      </h2>
+      {error && (
+        <p role="alert" className={`mt-4 ${errorText}`}>
+          {error}
+        </p>
+      )}
+      {!items && !error && <p className="mt-6 text-sm text-muted">Loading…</p>}
+      {shown?.length === 0 && (
+        <div className="mt-6">
+          <p className="text-sm text-muted">
+            Nothing saved yet. Tap the heart on any piece to keep it here.
+          </p>
+          <Link href="/shop/latest" className={`${secondaryButton} mt-6`}>
+            Shop the latest drip
+          </Link>
+        </div>
+      )}
+      {shown && shown.length > 0 && (
+        <ul className="mt-6 grid gap-x-4 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map(({ product }) => (
+            <li key={product.id}>
+              <ProductCard product={product} />
+              <button
+                type="button"
+                className={`${textButton} mt-3`}
+                disabled={removing === product.id}
+                aria-label={`Remove ${product.name} from wishlist`}
+                onClick={() => void remove(product.id)}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

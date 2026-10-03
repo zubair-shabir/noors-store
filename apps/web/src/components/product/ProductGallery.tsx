@@ -1,7 +1,7 @@
 'use client';
 
 import type { ImageDto } from '@noors/shared';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { easeOutExpo } from '@/lib/motion';
@@ -62,7 +62,7 @@ export function ProductGallery({ images, name }: { images: ImageDto[]; name: str
         data-cursor-label="View"
       >
         <AnimatePresence initial={false}>
-          <motion.div
+          <m.div
             key={active.url}
             className="absolute inset-0"
             initial={{ opacity: 0, scale: 1.03 }}
@@ -78,7 +78,7 @@ export function ProductGallery({ images, name }: { images: ImageDto[]; name: str
               sizes="(min-width: 1280px) 640px, 50vw"
               className="object-cover"
             />
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
     </div>

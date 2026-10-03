@@ -20,6 +20,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { HttpError } from '../../lib/errors.js';
 import type { PrismaClient } from '../../lib/prisma.js';
+import { revalidateCatalog } from '../../lib/revalidate.js';
 import {
   ADMIN_COOKIE,
   adminCookieOptions,
@@ -48,6 +49,19 @@ const bannerOrderSchema = reorderSchema.extend({ placement: bannerPlacementSchem
 
 const noStore: RequestHandler = (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
+  next();
+};
+
+/** Admin paths whose changes show in the storefront's cached catalogue (stock included). */
+const CATALOG_PATH = /^\/(products|categories|collections|featured|banners|inventory)(\/|$)/;
+
+/** After a successful catalogue change, asks the storefront to refresh its cached copy. */
+const refreshStorefront: RequestHandler = (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && CATALOG_PATH.test(req.path)) {
+    res.on('finish', () => {
+      if (res.statusCode < 400) void revalidateCatalog();
+    });
+  }
   next();
 };
 
@@ -129,7 +143,7 @@ export function adminRouter(opts: AdminRouterOptions): Router {
     res.clearCookie(ADMIN_COOKIE, adminCookieOptions(opts.secureCookies)).status(204).end();
   });
 
-  router.use(requireAdmin(auth));
+  router.use(requireAdmin(auth), refreshStorefront);
 
   router.get('/auth/me', (req, res) => {
     res.json({ admin: req.admin });

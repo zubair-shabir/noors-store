@@ -356,3 +356,35 @@ export function returnRequestedAlert(
     text: `${kind} requested for order ${order.number} by ${order.shippingAddress.name}.\n\n${returnItemsText(r)}\n\nReason: ${r.reason}\n\n${storeUrl}/admin/returns`,
   };
 }
+
+export interface EmailContact {
+  name: string;
+  email: string;
+  phone?: string;
+  orderNumber?: string;
+  message: string;
+}
+
+/** Contact form message, sent to the store. Plain on purpose: it is read, then answered. */
+export function contactMessage(storeUrl: string, c: EmailContact): Rendered {
+  const details = [
+    `From: ${c.name} <${c.email}>`,
+    c.phone ? `Phone: ${c.phone}` : null,
+    c.orderNumber ? `Order: ${c.orderNumber}` : null,
+  ].filter((l): l is string => Boolean(l));
+  const subject = `Contact form: ${c.name}${c.orderNumber ? ` (order ${c.orderNumber})` : ''}`;
+  const orderLink = c.orderNumber
+    ? `${storeUrl}/admin/orders/${encodeURIComponent(c.orderNumber)}`
+    : null;
+  return {
+    subject,
+    html: layout(
+      storeUrl,
+      c.message.slice(0, 120),
+      `${heading('New message')}${para(details.map(esc).join('<br>'))}
+<pre style="white-space:pre-wrap;font-size:14px;line-height:1.6;background:#f4f4f4;padding:16px;${font}">${esc(c.message)}</pre>
+${button(`mailto:${c.email}?subject=${encodeURIComponent(`Re: your message to Noor's`)}`, `Reply to ${c.name}`)}${orderLink ? para(`<a href="${esc(orderLink)}" style="color:#1c1c1c">Open order ${esc(c.orderNumber!)} in the dashboard</a>`) : ''}`,
+    ),
+    text: `${details.join('\n')}\n\n${c.message}\n\nReply to: ${c.email}${orderLink ? `\nOrder: ${orderLink}` : ''}`,
+  };
+}

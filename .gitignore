@@ -14,3 +14,8 @@ next-env.d.ts
 .vercel
 apps/api/src/generated
 apps/api/uploads
+
+# Playwright (apps/e2e)
+playwright-report
+test-results
+blob-report

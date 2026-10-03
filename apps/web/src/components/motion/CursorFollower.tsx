@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useMotionValue, useSpring } from 'motion/react';
+import { m, useMotionValue, useSpring } from 'motion/react';
 import { useEffect, useState } from 'react';
 
 /**
@@ -38,7 +38,7 @@ export function CursorFollower() {
   const size = label ? 96 : 12;
 
   return (
-    <motion.div
+    <m.div
       data-cursor-follower
       aria-hidden="true"
       className="pointer-events-none fixed top-0 left-0 z-[90] flex items-center justify-center rounded-full"
@@ -52,13 +52,13 @@ export function CursorFollower() {
       }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
     >
-      <motion.span
+      <m.span
         className="text-[11px] font-semibold tracking-[0.08em] text-black uppercase"
         animate={{ opacity: label ? 1 : 0, scale: label ? 1 : 0.6 }}
         transition={{ duration: 0.2 }}
       >
         {label}
-      </motion.span>
-    </motion.div>
+      </m.span>
+    </m.div>
   );
 }

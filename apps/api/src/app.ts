@@ -10,6 +10,7 @@ import { adminRouter, bannersRouter } from './modules/admin/admin.routes.js';
 import { LocalImageStore, type ImageStore } from './modules/admin/uploads.service.js';
 import { catalogRouter } from './modules/catalog/catalog.routes.js';
 import { CatalogService } from './modules/catalog/catalog.service.js';
+import { contentRouter } from './modules/content/content.routes.js';
 import { shippingRouter } from './modules/shipping/shipping.routes.js';
 import { storeRouter, type StoreRouterOptions } from './modules/store/store.routes.js';
 import { webhooksRouter } from './modules/store/webhooks.routes.js';
@@ -25,6 +26,8 @@ export interface AppOptions extends Omit<ServiceOptions, 'prisma'> {
   imageStore?: ImageStore;
   /** Folder for the local image store (and the /uploads route). */
   uploadsDir?: string;
+  /** Proxies in front of the API whose X-Forwarded-For can be trusted. Defaults to 1. */
+  trustProxyHops?: number;
   /** Send the admin session cookie over HTTPS only. On in production. */
   secureCookies?: boolean;
   loginRateLimit?: number;
@@ -37,17 +40,18 @@ export function createApp({
   imageStore,
   uploadsDir = 'uploads',
   secureCookies = false,
+  trustProxyHops = 1,
   loginRateLimit,
   storeRateLimits,
   services,
   ...serviceOptions
 }: AppOptions): Express {
   const app = express();
-  const { carts, auth, orders, fulfilment, paymentGateway, returns, ops } =
+  const { carts, auth, orders, fulfilment, paymentGateway, returns, ops, outbox } =
     services ?? createServices({ prisma, ...serviceOptions });
 
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  app.set('trust proxy', trustProxyHops);
   app.set('query parser', 'simple');
   app.use(helmet());
   app.use(cors({ origin: corsOrigins, credentials: true }));
@@ -85,6 +89,7 @@ export function createApp({
       ops,
     }),
   );
+  app.use('/api/v1', contentRouter({ prisma, outbox, allowedOrigins: corsOrigins }));
   // Store routes load the shopper's session, so they go after the catalogue and admin.
   app.use(
     '/api/v1',

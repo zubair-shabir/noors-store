@@ -20,6 +20,9 @@ export type OrderEmailKind =
   | 'return_update'
   | 'return_requested';
 
+/** Emails not tied to an order. */
+export type StoreEmailKind = 'contact_message';
+
 export interface QueueExtra {
   problem?: string;
   /** Delivered email: days a return can be asked for. */
@@ -153,6 +156,24 @@ export class EmailOutbox {
       ],
       skipDuplicates: true,
     });
+  }
+
+  /**
+   * Queues a contact form message to the store: its email from the settings, or the alert
+   * address when that is blank. Returns false when there is nowhere to send it.
+   */
+  async queueContactMessage(
+    db: PrismaClient | Tx,
+    message: templates.EmailContact,
+    storeEmail: string,
+  ): Promise<boolean> {
+    const to = storeEmail || this.opts.alertEmail;
+    if (!to) return false;
+    const kind: StoreEmailKind = 'contact_message';
+    await db.email.create({
+      data: { kind, to, ...templates.contactMessage(this.opts.storeUrl, message) },
+    });
+    return true;
   }
 
   /** Sends due emails soon, without waiting for the next scheduled run. */

@@ -126,6 +126,12 @@ describe('admin auth', () => {
       .set('Origin', 'https://evil.example')
       .send({ name: 'X', slug: 'x' });
     expect(res.status).toBe(403);
+    // A browser that leaves out Origin still says the request is cross-site.
+    const noOrigin = await asOwner
+      .post('/api/v1/admin/categories')
+      .set('Sec-Fetch-Site', 'cross-site')
+      .send({ name: 'X', slug: 'x' });
+    expect(noOrigin.status).toBe(403);
     const ok = await asOwner
       .post('/api/v1/admin/categories')
       .set('Origin', 'http://localhost:3000')

@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { ChinarLeaf } from '@/components/brand/ChinarLeaf';
 import { easeInOutQuart, easeOutExpo } from '@/lib/motion';
@@ -38,7 +38,7 @@ export function IntroLoader() {
   return (
     <AnimatePresence>
       {show && (
-        <motion.div
+        <m.div
           data-intro-loader
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black text-white"
           exit={{ y: '-100%' }}
@@ -47,7 +47,7 @@ export function IntroLoader() {
           <div className="relative">
             <div className="flex font-brand text-4xl tracking-[0.22em] sm:text-5xl">
               {LETTERS.map((letter, i) => (
-                <motion.span
+                <m.span
                   key={i}
                   className="relative"
                   initial={{ opacity: 0, y: 8 }}
@@ -55,27 +55,27 @@ export function IntroLoader() {
                   transition={{ delay: 0.15 + i * 0.14, duration: 0.35, ease: easeOutExpo }}
                 >
                   {letter === 'S' && i === LETTERS.length - 1 && (
-                    <motion.span
+                    <m.span
                       className="absolute -top-[0.62em] left-[-0.32em] block h-[0.62em] w-[0.62em]"
                       initial={{ opacity: 0, y: -18, rotate: -40 }}
                       animate={{ opacity: 1, y: 0, rotate: 0 }}
                       transition={{ delay: 1.0, duration: 0.6, ease: easeOutExpo }}
                     >
                       <ChinarLeaf className="h-full w-full" />
-                    </motion.span>
+                    </m.span>
                   )}
                   {letter}
-                </motion.span>
+                </m.span>
               ))}
             </div>
-            <motion.div
+            <m.div
               className="mt-3 h-px origin-left bg-white"
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
               transition={{ delay: 0.3, duration: 1.2, ease: easeOutExpo }}
             />
           </div>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

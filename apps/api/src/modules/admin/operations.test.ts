@@ -19,6 +19,7 @@ import { MockGateway } from '../../lib/payments.js';
 import { MockShippingProvider } from '../../lib/shipping.js';
 import { totpCode } from '../../lib/totp.js';
 import { createServices } from '../../services.js';
+import { ReportService } from './operations.service.js';
 
 const prisma = testPrisma();
 const gateway = new MockGateway();
@@ -611,6 +612,18 @@ describe('reports', () => {
     ]);
     expect(d.lowStock).toBe(1);
     expect((await as(owner).get('/reports/dashboard?days=12')).status).toBe(400);
+  });
+
+  it('counts an order placed just after midnight in India on the Indian day', async () => {
+    await placeOrder();
+    // 00:30 on 4 October in India is still 3 October in UTC.
+    await prisma.order.updateMany({ data: { createdAt: new Date('2026-10-03T19:00:00Z') } });
+    const d = await new ReportService(prisma).dashboard(
+      { days: '7' },
+      new Date('2026-10-03T20:00:00Z'),
+    );
+    expect(d.today).toEqual({ sales: 499800, orders: 1 });
+    expect(d.revenue.at(-1)).toMatchObject({ date: '2026-10-04', orders: 1 });
   });
 });
 

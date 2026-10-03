@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { Reveal } from '@/components/motion/Reveal';
@@ -49,7 +49,7 @@ function FaqRow({ item }: { item: FaqItem }) {
       </h3>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div
+          <m.div
             id={id}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -58,7 +58,7 @@ function FaqRow({ item }: { item: FaqItem }) {
             className="overflow-hidden"
           >
             <div className="pb-6 text-sm text-muted sm:text-base">{item.answer}</div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
