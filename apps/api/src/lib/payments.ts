@@ -18,6 +18,18 @@ export interface PaymentGateway {
   verifyPayment(razorpayOrderId: string, razorpayPaymentId: string, signature: string): boolean;
   /** Checks the X-Razorpay-Signature header of a webhook against its raw body. */
   verifyWebhook(rawBody: Buffer, signature: string): boolean;
+  /** Refunds part or all of a captured payment, in paise. */
+  refund(
+    razorpayPaymentId: string,
+    amount: number,
+    notes?: Record<string, string>,
+  ): Promise<GatewayRefund>;
+}
+
+export interface GatewayRefund {
+  id: string;
+  /** Razorpay processes most refunds at once; some stay pending until the bank confirms. */
+  status: 'processed' | 'pending';
 }
 
 const hmac = (secret: string, data: string | Buffer) =>
@@ -58,13 +70,32 @@ export class RazorpayGateway extends SignedGateway implements PaymentGateway {
     super(keySecret, webhookSecret);
   }
 
+  private get headers() {
+    return {
+      Authorization: `Basic ${Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64')}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async refund(razorpayPaymentId: string, amount: number, notes?: Record<string, string>) {
+    const res = await fetch(
+      `https://api.razorpay.com/v1/payments/${encodeURIComponent(razorpayPaymentId)}/refund`,
+      {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ amount, notes, speed: 'normal' }),
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!res.ok) throw new Error(`Razorpay refund failed (${res.status}): ${await res.text()}`);
+    const body = (await res.json()) as { id: string; status: string };
+    return { id: body.id, status: body.status === 'processed' ? 'processed' : 'pending' } as const;
+  }
+
   async createOrder(input: { amount: number; receipt: string; notes?: Record<string, string> }) {
     const res = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-      },
+      headers: this.headers,
       body: JSON.stringify({
         amount: input.amount,
         currency: 'INR',
@@ -93,8 +124,23 @@ export class MockGateway extends SignedGateway implements PaymentGateway {
     super(keySecret, webhookSecret);
   }
 
+  /** Refunds "made" so far, for tests. */
+  readonly refunds: { paymentId: string; amount: number }[] = [];
+  /** Set to make the next refund throw, for tests. */
+  failNextRefund: string | null = null;
+
   async createOrder() {
     return { id: `order_mock${randomBytes(7).toString('hex')}` };
+  }
+
+  async refund(razorpayPaymentId: string, amount: number) {
+    if (this.failNextRefund) {
+      const message = this.failNextRefund;
+      this.failNextRefund = null;
+      throw new Error(message);
+    }
+    this.refunds.push({ paymentId: razorpayPaymentId, amount });
+    return { id: `rfnd_mock${randomBytes(7).toString('hex')}`, status: 'processed' as const };
   }
 
   /** What Razorpay Checkout would return for a successful payment of this order. */

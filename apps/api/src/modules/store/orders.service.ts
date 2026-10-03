@@ -25,6 +25,7 @@ import {
   type CartOwner,
   type CartService,
 } from './cart.service.js';
+import { loadSetting } from '../settings/settings.service.js';
 import { couponDiscount, couponProblem, shippingSettings, totals } from './pricing.js';
 
 /** How long stock is held for an unpaid order. */
@@ -36,6 +37,7 @@ const orderInclude = {
   items: { include: { variant: { select: { product: { select: { slug: true } } } } } },
   shipments: { where: { status: { not: 'CANCELLED' } }, orderBy: { createdAt: 'desc' }, take: 1 },
   events: { orderBy: { createdAt: 'asc' }, select: { type: true, createdAt: true } },
+  returns: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.OrderInclude;
 type OrderWithItems = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
@@ -43,6 +45,7 @@ type OrderWithItems = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 const TIMELINE_LABELS: Record<string, string> = {
   created: 'Order placed',
   paid: 'Payment received',
+  cod_confirmed: 'Order confirmed (cash on delivery)',
   late_payment: 'Payment received',
   packed: 'Packed and handed to the courier',
   shipped: 'Shipped',
@@ -52,6 +55,7 @@ const TIMELINE_LABELS: Record<string, string> = {
   abandoned: 'Cancelled',
   payment_setup_failed: 'Cancelled',
   cancelled: 'Cancelled',
+  refunded: 'Refund issued',
 };
 
 export interface CheckoutRequest {
@@ -59,6 +63,7 @@ export interface CheckoutRequest {
   address: AddressFields;
   saveAddress: boolean;
   notes: string | null;
+  paymentMethod?: 'RAZORPAY' | 'COD';
 }
 
 export interface PaymentConfirmation {
@@ -112,6 +117,16 @@ export class OrderService {
     }
     const discount = coupon ? couponDiscount(coupon, subtotal) : 0;
     const amounts = totals(subtotal, discount, await shippingSettings(this.prisma));
+    const cod = input.paymentMethod === 'COD';
+    if (cod) {
+      const settings = await loadSetting(this.prisma, 'cod');
+      if (!settings.enabled) {
+        throw new HttpError(400, 'Cash on delivery is not available', 'cod_unavailable');
+      }
+      // The COD charge rides on the shipping line.
+      amounts.shippingFee += settings.fee;
+      amounts.total += settings.fee;
+    }
     if (amounts.total < 100) {
       throw new HttpError(400, 'The order total must be at least ₹1', 'total_too_low');
     }
@@ -128,8 +143,13 @@ export class OrderService {
 
     const order = await this.prisma.$transaction(async (tx) => {
       for (const { item, line } of lines) {
-        // Conditional update: two shoppers can't both take the last unit.
-        const held = await tx.$executeRaw`
+        // Conditional update: two shoppers can't both take the last unit. Online orders hold
+        // the stock until paid; cash-on-delivery orders take it straight away.
+        const held = cod
+          ? await tx.$executeRaw`
+          UPDATE variants SET stock = stock - ${item.quantity}, updated_at = now()
+          WHERE id = ${item.variantId} AND is_active AND stock - reserved >= ${item.quantity}`
+          : await tx.$executeRaw`
           UPDATE variants SET reserved = reserved + ${item.quantity}, updated_at = now()
           WHERE id = ${item.variantId} AND is_active AND stock - reserved >= ${item.quantity}`;
         if (held === 0) {
@@ -150,20 +170,22 @@ export class OrderService {
       if (customer) await this.rememberCustomerDetails(tx, customer, input);
 
       const [{ n }] = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('order_number_seq') AS n`;
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           number: `NR-${n}`,
           customerId: customer?.id ?? null,
           email: input.email,
           phone: input.address.phone,
-          paymentMethod: 'RAZORPAY',
+          paymentMethod: cod ? 'COD' : 'RAZORPAY',
+          status: cod ? 'PAID' : 'PENDING_PAYMENT',
+          placedAt: cod ? new Date() : null,
           ...amounts,
           couponCode: coupon?.code ?? null,
           couponId: coupon?.id ?? null,
           shippingAddress: input.address,
           notes: input.notes,
           accessTokenHash: hashToken(accessToken),
-          expiresAt,
+          expiresAt: cod ? null : expiresAt,
           cartId: cart.id,
           items: {
             create: lines.map(({ item, line }) => ({
@@ -177,10 +199,49 @@ export class OrderService {
               hsnCode: item.variant.product.hsnCode,
             })),
           },
-          events: { create: { type: 'created', message: 'Order placed, waiting for payment' } },
+          events: {
+            create: cod
+              ? [
+                  { type: 'created', message: 'Order placed' },
+                  { type: 'cod_confirmed', message: 'Confirmed for cash on delivery' },
+                ]
+              : [{ type: 'created', message: 'Order placed, waiting for payment' }],
+          },
         },
+        include: { items: true },
       });
+      if (cod) {
+        await tx.payment.create({
+          data: { orderId: created.id, provider: 'COD', amount: created.total },
+        });
+        await tx.inventoryLog.createMany({
+          data: created.items.flatMap((i) =>
+            i.variantId
+              ? [
+                  {
+                    variantId: i.variantId,
+                    change: -i.quantity,
+                    reason: 'order',
+                    orderId: created.id,
+                  },
+                ]
+              : [],
+          ),
+        });
+        await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+        await tx.cart.update({ where: { id: cart.id }, data: { couponCode: null } });
+        await this.outbox.queueForOrder(tx, 'order_confirmed', created.id);
+        await this.outbox.queueForOrder(tx, 'new_order_alert', created.id);
+        await this.fulfilment.queueBooking(tx, created.id);
+      }
+      return created;
     });
+
+    if (cod) {
+      this.outbox.kick();
+      this.fulfilment.kick();
+      return { orderNumber: order.number, accessToken, expiresAt: null, payment: null };
+    }
 
     let razorpayOrderId: string;
     try {
@@ -242,7 +303,7 @@ export class OrderService {
       razorpayPaymentId: input.razorpayPaymentId,
       source: 'checkout',
     });
-    return this.toDto(await this.load({ number: input.orderNumber }));
+    return this.present(await this.load({ number: input.orderNumber }));
   }
 
   /**
@@ -435,7 +496,7 @@ export class OrderService {
   }
 
   async publicOrder(orderNumber: string, accessToken: string): Promise<OrderDto> {
-    return this.toDto(await this.byAccessToken(orderNumber, accessToken));
+    return this.present(await this.byAccessToken(orderNumber, accessToken));
   }
 
   /** Orders placed with this account or its email address, newest first. */
@@ -462,7 +523,7 @@ export class OrderService {
       include: orderInclude,
     });
     if (!order) throw new HttpError(404, 'Order not found', 'not_found');
-    return this.toDto(order);
+    return this.present(order);
   }
 
   /** The public tracking page: the order number and the phone number it was placed with. */
@@ -475,7 +536,7 @@ export class OrderService {
         'not_found',
       );
     }
-    const dto = this.toDto(order);
+    const dto = await this.present(order);
     const events = order.shipments[0]?.events;
     return {
       number: dto.number,
@@ -496,7 +557,13 @@ export class OrderService {
     return this.prisma.order.findUniqueOrThrow({ where, include: orderInclude });
   }
 
-  private toDto(o: OrderWithItems): OrderDto {
+  /** The order as its shopper sees it. */
+  async present(o: OrderWithItems): Promise<OrderDto> {
+    const { windowDays } = await loadSetting(this.prisma, 'returns');
+    return this.toDto(o, windowDays);
+  }
+
+  private toDto(o: OrderWithItems, returnDays: number): OrderDto {
     return {
       number: o.number,
       status: o.status,
@@ -521,8 +588,17 @@ export class OrderService {
       total: o.total,
       couponCode: o.couponCode,
       shippingAddress: o.shippingAddress as unknown as AddressFields,
+      paymentMethod: o.paymentMethod,
       shipment: shipmentDto(o.shipments[0]),
       timeline: timeline(o.events),
+      returns: o.returns.map((r) => ({
+        id: r.id,
+        type: r.type,
+        status: r.status,
+        createdAt: r.createdAt.toISOString(),
+        items: returnItems(r.items, o.items),
+      })),
+      returnableUntil: returnableUntil(o, returnDays)?.toISOString() ?? null,
     };
   }
 
@@ -596,4 +672,37 @@ function timeline(events: { type: string; createdAt: Date }[]): TimelineEntryDto
     entries.push({ at: e.createdAt.toISOString(), label });
   }
   return entries;
+}
+
+/** The items of a return request, named from the order's lines. */
+export function returnItems(
+  json: Prisma.JsonValue,
+  orderItems: { id: string; productName: string; variantTitle: string }[],
+) {
+  const lines = (Array.isArray(json) ? json : []) as { orderItemId: string; quantity: number }[];
+  return lines.flatMap((l) => {
+    const item = orderItems.find((i) => i.id === l.orderItemId);
+    return item ? [{ name: item.productName, title: item.variantTitle, quantity: l.quantity }] : [];
+  });
+}
+
+/**
+ * Until when a delivered order can be returned: the window counts from delivery. Null when it
+ * is not delivered, the window passed, or a return is already open or done.
+ */
+export function returnableUntil(
+  o: {
+    status: string;
+    events: { type: string; createdAt: Date }[];
+    returns: { status: string }[];
+  },
+  returnDays: number,
+  now = new Date(),
+): Date | null {
+  if (o.status !== 'DELIVERED' || returnDays <= 0) return null;
+  if (o.returns.some((r) => r.status !== 'REJECTED')) return null;
+  const delivered = [...o.events].reverse().find((e) => e.type === 'delivered')?.createdAt;
+  if (!delivered) return null;
+  const until = new Date(delivered.getTime() + returnDays * 24 * 60 * 60 * 1000);
+  return until > now ? until : null;
 }

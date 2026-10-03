@@ -4,6 +4,7 @@ import { logger } from '../../lib/logger.js';
 import type { PrismaClient } from '../../lib/prisma.js';
 import { trackingUrl, type ShipmentRequest, type ShippingProvider } from '../../lib/shipping.js';
 import type { EmailOutbox } from '../notify/outbox.js';
+import { loadSetting } from '../settings/settings.service.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -20,10 +21,8 @@ export interface FulfilmentSettings {
   autoShip: boolean;
 }
 
-export async function fulfilmentSettings(db: PrismaClient | Tx): Promise<FulfilmentSettings> {
-  const row = await db.setting.findUnique({ where: { key: 'fulfilment' } });
-  const value = (row?.value ?? {}) as Partial<FulfilmentSettings>;
-  return { autoShip: value.autoShip ?? true };
+export function fulfilmentSettings(db: PrismaClient | Tx): Promise<FulfilmentSettings> {
+  return loadSetting(db, 'fulfilment');
 }
 
 /** What Shiprocket's tracking webhook sends (only the fields we use). */
@@ -146,11 +145,41 @@ export class FulfilmentService {
   /** Inside the payment transaction: lines up a shipment for a newly paid order. */
   async queueBooking(tx: Tx, orderId: string): Promise<void> {
     if (!(await fulfilmentSettings(tx)).autoShip) return;
+    await this.requestBooking(tx, orderId);
+  }
+
+  /**
+   * Books now, whatever the auto-ship setting: a new shipment, or another try for one whose
+   * booking stalled. Returns false when the order already has a booked shipment.
+   */
+  async requestBooking(tx: Tx, orderId: string): Promise<boolean> {
     const open = await tx.shipment.findFirst({
       where: { orderId, status: { not: 'CANCELLED' } },
     });
-    if (open) return;
-    await tx.shipment.create({ data: { orderId, nextAttemptAt: new Date() } });
+    if (!open) {
+      await tx.shipment.create({ data: { orderId, nextAttemptAt: new Date() } });
+      return true;
+    }
+    if (open.status !== 'PENDING' && open.status !== 'AWB_ASSIGNED') return false;
+    await tx.shipment.update({
+      where: { id: open.id },
+      data: { attempts: 0, nextAttemptAt: new Date(), lastError: null },
+    });
+    return true;
+  }
+
+  /** Cancels a shipment, with Shiprocket too when it was booked there. */
+  async cancelShipment(shipmentId: string): Promise<void> {
+    const shipment = await this.prisma.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
+    if (shipment.status === 'CANCELLED') return;
+    if (RANK[shipment.status] >= RANK.IN_TRANSIT) {
+      throw new Error('The courier already has this parcel');
+    }
+    if (shipment.shiprocketOrderId) await this.provider.cancelOrder(shipment.shiprocketOrderId);
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: { status: 'CANCELLED', nextAttemptAt: null },
+    });
   }
 
   /** Books due shipments soon, without waiting for the next scheduled run. */
@@ -324,48 +353,14 @@ export class FulfilmentService {
 
       const order = shipment.order;
       const orderId = order.id;
-      const advance = async (
-        status: 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED',
-        from: ('PAID' | 'READY_TO_SHIP' | 'SHIPPED' | 'OUT_FOR_DELIVERY')[],
-        type: string,
-        message: string,
-        email: 'shipped' | 'out_for_delivery' | 'delivered',
-      ) => {
-        const moved = await tx.order.updateMany({
-          where: { id: orderId, status: { in: from } },
-          data: { status },
-        });
-        if (!moved.count) return false;
-        await tx.orderEvent.create({ data: { orderId, type, message } });
-        await this.outbox.queueForOrder(tx, email, orderId);
-        return true;
-      };
-
+      const courier = shipment.courier ?? 'the courier';
       switch (next) {
         case 'IN_TRANSIT':
-          return advance(
-            'SHIPPED',
-            ['PAID', 'READY_TO_SHIP'],
-            'shipped',
-            `Picked up by ${shipment.courier ?? 'the courier'}`,
-            'shipped',
-          );
+          return this.advanceOrder(tx, orderId, 'SHIPPED', `Picked up by ${courier}`);
         case 'OUT_FOR_DELIVERY':
-          return advance(
-            'OUT_FOR_DELIVERY',
-            ['PAID', 'READY_TO_SHIP', 'SHIPPED'],
-            'out_for_delivery',
-            'Out for delivery',
-            'out_for_delivery',
-          );
+          return this.advanceOrder(tx, orderId, 'OUT_FOR_DELIVERY', 'Out for delivery');
         case 'DELIVERED':
-          return advance(
-            'DELIVERED',
-            ['PAID', 'READY_TO_SHIP', 'SHIPPED', 'OUT_FOR_DELIVERY'],
-            'delivered',
-            'Delivered',
-            'delivered',
-          );
+          return this.advanceOrder(tx, orderId, 'DELIVERED', 'Delivered');
         case 'RTO':
           await tx.orderEvent.create({
             data: {
@@ -394,6 +389,43 @@ export class FulfilmentService {
     });
     if (queued === null) return false;
     if (queued) this.outbox.kick();
+    return true;
+  }
+
+  /**
+   * Moves an order forward to shipped, out for delivery or delivered (never back), notes it
+   * and emails the shopper. Cash on delivery counts as paid once delivered.
+   * Returns false when the order was already past that point.
+   */
+  async advanceOrder(
+    tx: Tx,
+    orderId: string,
+    to: 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED',
+    message: string,
+    adminUserId?: string,
+  ): Promise<boolean> {
+    const from: Record<typeof to, ('PAID' | 'READY_TO_SHIP' | 'SHIPPED' | 'OUT_FOR_DELIVERY')[]> = {
+      SHIPPED: ['PAID', 'READY_TO_SHIP'],
+      OUT_FOR_DELIVERY: ['PAID', 'READY_TO_SHIP', 'SHIPPED'],
+      DELIVERED: ['PAID', 'READY_TO_SHIP', 'SHIPPED', 'OUT_FOR_DELIVERY'],
+    };
+    const moved = await tx.order.updateMany({
+      where: { id: orderId, status: { in: from[to] } },
+      data: { status: to },
+    });
+    if (!moved.count) return false;
+    const type = to.toLowerCase();
+    await tx.orderEvent.create({ data: { orderId, type, message, adminUserId } });
+    if (to === 'DELIVERED') {
+      await tx.payment.updateMany({
+        where: { orderId, provider: 'COD', status: 'CREATED' },
+        data: { status: 'CAPTURED' },
+      });
+      const { windowDays } = await loadSetting(tx, 'returns');
+      await this.outbox.queueForOrder(tx, 'delivered', orderId, { returnDays: windowDays });
+    } else {
+      await this.outbox.queueForOrder(tx, type as 'shipped' | 'out_for_delivery', orderId);
+    }
     return true;
   }
 }
@@ -460,6 +492,7 @@ export function shipmentRequest(order: OrderForBooking): ShipmentRequest {
       sellingPrice: i.unitPrice / 100,
       hsn: i.hsnCode,
     })),
+    paymentMethod: order.paymentMethod === 'COD' ? 'COD' : 'Prepaid',
     subTotal: order.subtotal / 100,
     discount: order.discount / 100,
     shippingCharges: order.shippingFee / 100,

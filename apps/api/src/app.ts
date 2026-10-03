@@ -43,7 +43,7 @@ export function createApp({
   ...serviceOptions
 }: AppOptions): Express {
   const app = express();
-  const { carts, auth, orders, fulfilment, paymentGateway } =
+  const { carts, auth, orders, fulfilment, paymentGateway, returns, ops } =
     services ?? createServices({ prisma, ...serviceOptions });
 
   app.disable('x-powered-by');
@@ -72,7 +72,7 @@ export function createApp({
   app.use('/api/v1/banners', bannersRouter(prisma));
   app.use(
     '/api/v1',
-    shippingRouter({ prisma, orders, fulfilment, trackLimit: storeRateLimits?.track }),
+    shippingRouter({ prisma, orders, fulfilment, returns, trackLimit: storeRateLimits?.track }),
   );
   app.use(
     '/api/v1/admin',
@@ -82,6 +82,7 @@ export function createApp({
       allowedOrigins: corsOrigins,
       secureCookies,
       loginRateLimit,
+      ops,
     }),
   );
   // Store routes load the shopper's session, so they go after the catalogue and admin.
@@ -92,6 +93,7 @@ export function createApp({
       carts,
       auth,
       orders,
+      returns,
       gateway: paymentGateway,
       allowedOrigins: corsOrigins,
       secureCookies,

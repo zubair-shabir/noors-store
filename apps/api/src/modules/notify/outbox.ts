@@ -14,7 +14,22 @@ export type OrderEmailKind =
   | 'shipped'
   | 'out_for_delivery'
   | 'delivered'
-  | 'shipment_problem';
+  | 'shipment_problem'
+  | 'order_cancelled'
+  | 'refund_issued'
+  | 'return_update'
+  | 'return_requested';
+
+export interface QueueExtra {
+  problem?: string;
+  /** Delivered email: days a return can be asked for. */
+  returnDays?: number;
+  /** Cancellation and refund emails: amount refunded, in paise. */
+  amount?: number;
+  return?: templates.EmailReturn;
+  /** Makes the email unique per event rather than per order (refunds, return updates). */
+  key?: string;
+}
 
 const MAX_ATTEMPTS = 5;
 /** A row stuck in SENDING this long (the process died mid-send) is tried again. */
@@ -53,7 +68,7 @@ export class EmailOutbox {
     tx: Tx,
     kind: OrderEmailKind,
     orderId: string,
-    extra: { problem?: string } = {},
+    extra: QueueExtra = {},
   ): Promise<void> {
     const order = await tx.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -71,6 +86,7 @@ export class EmailOutbox {
       shippingFee: order.shippingFee,
       total: order.total,
       couponCode: order.couponCode,
+      paymentMethod: order.paymentMethod,
       shippingAddress: order.shippingAddress as unknown as EmailOrder['shippingAddress'],
     };
     const s = order.shipments[0];
@@ -98,7 +114,21 @@ export class EmailOutbox {
         rendered = templates.outForDelivery(url, data, shipment);
         break;
       case 'delivered':
-        rendered = templates.delivered(url, data);
+        rendered = templates.delivered(url, data, extra.returnDays ?? 0);
+        break;
+      case 'order_cancelled':
+        rendered = templates.orderCancelled(url, data, extra.amount ?? 0);
+        break;
+      case 'refund_issued':
+        rendered = templates.refundIssued(url, data, extra.amount ?? 0);
+        break;
+      case 'return_update':
+        rendered = templates.returnUpdate(url, data, extra.return!);
+        break;
+      case 'return_requested':
+        if (!this.opts.alertEmail) return;
+        to = this.opts.alertEmail;
+        rendered = templates.returnRequestedAlert(url, data, extra.return!);
         break;
       case 'new_order_alert':
       case 'shipment_problem':
@@ -112,7 +142,15 @@ export class EmailOutbox {
     }
 
     await tx.email.createMany({
-      data: [{ dedupeKey: `${kind}:${orderId}`, kind, orderId, to, ...rendered }],
+      data: [
+        {
+          dedupeKey: `${kind}:${orderId}${extra.key ? `:${extra.key}` : ''}`,
+          kind,
+          orderId,
+          to,
+          ...rendered,
+        },
+      ],
       skipDuplicates: true,
     });
   }

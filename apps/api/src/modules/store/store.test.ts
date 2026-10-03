@@ -79,7 +79,7 @@ async function checkout(agent: ReturnType<typeof shopper>, body: Record<string, 
 }
 
 async function pay(agent: ReturnType<typeof shopper>, result: CheckoutResultDto) {
-  const signed = gateway.pay(result.payment.razorpayOrderId);
+  const signed = gateway.pay(result.payment!.razorpayOrderId);
   return agent.post('/api/v1/checkout/verify').send({ orderNumber: result.orderNumber, ...signed });
 }
 
@@ -418,7 +418,7 @@ describe('checkout', () => {
     const result = (await checkout(agent)).body as CheckoutResultDto;
     const res = await agent.post('/api/v1/checkout/verify').send({
       orderNumber: result.orderNumber,
-      razorpayOrderId: result.payment.razorpayOrderId,
+      razorpayOrderId: result.payment!.razorpayOrderId,
       razorpayPaymentId: 'pay_fake',
       razorpaySignature: 'f'.repeat(64),
     });
@@ -429,7 +429,7 @@ describe('checkout', () => {
     const otherAgent = shopper();
     await addToCart(otherAgent, tee);
     const other = (await checkout(otherAgent)).body as CheckoutResultDto;
-    const signed = gateway.pay(other.payment.razorpayOrderId);
+    const signed = gateway.pay(other.payment!.razorpayOrderId);
     const swapped = await agent
       .post('/api/v1/checkout/verify')
       .send({ orderNumber: result.orderNumber, ...signed });
@@ -606,7 +606,7 @@ describe('Razorpay webhooks', () => {
   });
 
   it('confirms the order when the shopper closed the tab after paying', async () => {
-    const res = await send(captured(result.payment.razorpayOrderId, result.payment.amount), {
+    const res = await send(captured(result.payment!.razorpayOrderId, result.payment!.amount), {
       eventId: 'evt_1',
     });
     expect(res.status).toBe(200);
@@ -621,7 +621,7 @@ describe('Razorpay webhooks', () => {
       method: 'upi',
     });
 
-    const repeat = await send(captured(result.payment.razorpayOrderId, result.payment.amount), {
+    const repeat = await send(captured(result.payment!.razorpayOrderId, result.payment!.amount), {
       eventId: 'evt_1',
     });
     expect(repeat.body).toEqual({ status: 'duplicate' });
@@ -629,7 +629,7 @@ describe('Razorpay webhooks', () => {
   });
 
   it('rejects a bad signature', async () => {
-    const res = await send(captured(result.payment.razorpayOrderId, result.payment.amount), {
+    const res = await send(captured(result.payment!.razorpayOrderId, result.payment!.amount), {
       signature: 'bad',
     });
     expect(res.status).toBe(400);
@@ -637,7 +637,7 @@ describe('Razorpay webhooks', () => {
   });
 
   it("doesn't confirm a payment for the wrong amount", async () => {
-    await send(captured(result.payment.razorpayOrderId, 100));
+    await send(captured(result.payment!.razorpayOrderId, 100));
     const order = await prisma.order.findUniqueOrThrow({
       where: { number: result.orderNumber },
       include: { events: true },
@@ -653,8 +653,8 @@ describe('Razorpay webhooks', () => {
         payment: {
           entity: {
             id: 'pay_x',
-            order_id: result.payment.razorpayOrderId,
-            amount: result.payment.amount,
+            order_id: result.payment!.razorpayOrderId,
+            amount: result.payment!.amount,
             error_description: 'Payment was cancelled by the user',
           },
         },

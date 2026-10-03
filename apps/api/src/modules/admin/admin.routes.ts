@@ -27,7 +27,7 @@ import {
   requireRole,
   sameOriginOnly,
 } from './auth.middleware.js';
-import { AdminAuthService } from './auth.service.js';
+import { mountOperations, type OperationsServices } from './operations.routes.js';
 import { AdminMerchService } from './merch.service.js';
 import { AdminProductService } from './products.service.js';
 import { MAX_UPLOAD_BYTES, sniffImageType, type ImageStore } from './uploads.service.js';
@@ -39,6 +39,7 @@ export interface AdminRouterOptions {
   secureCookies: boolean;
   /** Sign-in attempts allowed per IP per 15 minutes. */
   loginRateLimit?: number;
+  ops: OperationsServices;
 }
 
 const owner = requireRole('OWNER');
@@ -73,7 +74,7 @@ const singleFile: RequestHandler = (req, res, next) => {
 };
 
 export function adminRouter(opts: AdminRouterOptions): Router {
-  const auth = new AdminAuthService(opts.prisma);
+  const auth = opts.ops.auth;
   const products = new AdminProductService(opts.prisma);
   const merch = new AdminMerchService(opts.prisma);
   const router = Router();
@@ -99,13 +100,20 @@ export function adminRouter(opts: AdminRouterOptions): Router {
         ),
     }),
     async (req, res) => {
-      const { email, password } = adminLoginSchema.parse(req.body);
+      const { email, password, code } = adminLoginSchema.parse(req.body);
       const result = await auth.login(email, password, {
         ip: req.ip,
         userAgent: req.get('user-agent'),
+        code,
       });
-      if (!result)
-        throw new HttpError(401, 'Email or password is incorrect', 'invalid_credentials');
+      if (!result.ok) {
+        const messages = {
+          invalid_credentials: 'Email or password is incorrect',
+          two_factor_required: 'Enter the code from your authenticator app',
+          invalid_code: 'That code is not right. Codes change every 30 seconds.',
+        };
+        throw new HttpError(401, messages[result.reason], result.reason);
+      }
       res
         .cookie(ADMIN_COOKIE, result.token, {
           ...adminCookieOptions(opts.secureCookies),
@@ -126,6 +134,8 @@ export function adminRouter(opts: AdminRouterOptions): Router {
   router.get('/auth/me', (req, res) => {
     res.json({ admin: req.admin });
   });
+
+  mountOperations(router, opts.ops);
 
   const adminId = (req: Express.Request) => req.admin!.id;
   const idOf = (req: Express.Request & { params: Record<string, unknown> }) =>

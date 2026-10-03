@@ -11,6 +11,12 @@ export type AdminRole = z.infer<typeof adminRoleSchema>;
 export const adminLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1).max(200),
+  /** Authenticator code, for accounts with two-factor sign-in. */
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Enter the 6-digit code')
+    .optional(),
 });
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 
@@ -19,6 +25,7 @@ export interface AdminMeDto {
   email: string;
   name: string;
   role: AdminRole;
+  twoFactor: boolean;
 }
 
 // ─── Shared pieces ──────────────────────────────────────────────────────────

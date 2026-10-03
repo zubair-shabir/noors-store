@@ -22,6 +22,7 @@ export interface EmailOrder {
   shippingFee: number;
   total: number;
   couponCode: string | null;
+  paymentMethod: 'RAZORPAY' | 'COD';
   shippingAddress: {
     name: string;
     phone: string;
@@ -94,7 +95,7 @@ function itemsTable(storeUrl: string, order: EmailOrder): string {
 ${line('Subtotal', formatINR(order.subtotal))}
 ${order.discount > 0 ? line(`Discount${order.couponCode ? ` (${order.couponCode})` : ''}`, `−${formatINR(order.discount)}`) : ''}
 ${line('Shipping', order.shippingFee === 0 ? 'Free' : formatINR(order.shippingFee))}
-${line('Total paid', formatINR(order.total), true)}
+${line(order.paymentMethod === 'COD' ? 'Pay on delivery' : 'Total paid', formatINR(order.total), true)}
 </table>`;
 }
 
@@ -142,7 +143,7 @@ export function orderConfirmed(storeUrl: string, order: EmailOrder): Rendered {
       `${heading('Thank you')}${para(`Hi ${esc(first ?? '')}, your order <strong>${esc(order.number)}</strong> is confirmed. We'll email you again when it ships.`)}
 ${itemsTable(storeUrl, order)}${addressBlock(order)}${button(trackLink(storeUrl, order.number), 'Track your order')}`,
     ),
-    text: `Thank you, ${first}. Your order ${order.number} is confirmed.\n\n${itemsText(order)}\n\nTotal paid: ${formatINR(order.total)}\n\nTrack it: ${trackLink(storeUrl, order.number)}`,
+    text: `Thank you, ${first}. Your order ${order.number} is confirmed.\n\n${itemsText(order)}\n\n${order.paymentMethod === 'COD' ? 'Pay on delivery' : 'Total paid'}: ${formatINR(order.total)}\n\nTrack it: ${trackLink(storeUrl, order.number)}`,
   };
 }
 
@@ -207,16 +208,20 @@ export function outForDelivery(
   };
 }
 
-export function delivered(storeUrl: string, order: EmailOrder): Rendered {
+export function delivered(storeUrl: string, order: EmailOrder, returnDays: number): Rendered {
+  const returns =
+    returnDays > 0
+      ? `Something not right with the fit? You can ask for an exchange or return within ${returnDays} days from your order page.`
+      : 'Something not right? Reply to this email and we will help.';
   return {
     subject: `Order ${order.number} was delivered`,
     html: layout(
       storeUrl,
       'We hope you love it.',
       `${heading('Delivered')}${para(`Your order <strong>${esc(order.number)}</strong> was delivered. We hope you love it.`)}
-${para('Something not right with the fit? You can ask for an exchange or return within 7 days of delivery by replying to this email.')}${button(`${storeUrl}/shop/latest`, 'See the latest drip')}`,
+${para(esc(returns))}${button(trackLink(storeUrl, order.number), 'View your order')}`,
     ),
-    text: `Your order ${order.number} was delivered. We hope you love it.\n\nNeed an exchange or return? Reply to this email within 7 days.`,
+    text: `Your order ${order.number} was delivered. We hope you love it.\n\n${returns}\n${trackLink(storeUrl, order.number)}`,
   };
 }
 
@@ -227,7 +232,7 @@ export function newOrderAlert(storeUrl: string, order: EmailOrder): Rendered {
     html: layout(
       storeUrl,
       `${order.items.length} item(s) to ${a.city}`,
-      `${heading(`New order ${order.number}`)}${para(`${esc(a.name)} in ${esc(a.city)}, ${esc(a.state)} paid ${formatINR(order.total)}.`)}${itemsTable(storeUrl, order)}${addressBlock(order)}`,
+      `${heading(`New order ${order.number}`)}${para(`${esc(a.name)} in ${esc(a.city)}, ${esc(a.state)} ${order.paymentMethod === 'COD' ? 'will pay on delivery:' : 'paid'} ${formatINR(order.total)}.`)}${itemsTable(storeUrl, order)}${addressBlock(order)}`,
     ),
     text: `New order ${order.number}: ${formatINR(order.total)} from ${a.name} (${a.city}).\n\n${itemsText(order)}`,
   };
@@ -243,5 +248,111 @@ export function shipmentProblem(storeUrl: string, order: EmailOrder, problem: st
 <pre style="white-space:pre-wrap;font-size:12px;background:#f4f4f4;padding:12px">${esc(problem)}</pre>${para('Book it by hand in the Shiprocket panel. Common causes are a missing pickup address or a pincode the courier no longer serves.')}`,
     ),
     text: `Order ${order.number} could not be booked with Shiprocket:\n${problem}`,
+  };
+}
+
+export function orderCancelled(storeUrl: string, order: EmailOrder, refund: number): Rendered {
+  const money =
+    refund > 0
+      ? `We have refunded ${formatINR(refund)} to your original payment method. It usually shows up within 5 to 7 working days.`
+      : order.paymentMethod === 'COD'
+        ? 'Nothing was charged.'
+        : '';
+  return {
+    subject: `Order ${order.number} was cancelled`,
+    html: layout(
+      storeUrl,
+      money || 'Your order was cancelled.',
+      `${heading('Order cancelled')}${para(`Your order <strong>${esc(order.number)}</strong> was cancelled.`)}${money ? para(esc(money)) : ''}${para('If you did not expect this, reply to this email and we will sort it out.')}`,
+    ),
+    text: `Your order ${order.number} was cancelled.\n${money}\n\nIf you did not expect this, reply to this email.`,
+  };
+}
+
+export function refundIssued(storeUrl: string, order: EmailOrder, amount: number): Rendered {
+  return {
+    subject: `Refund of ${formatINR(amount)} for order ${order.number}`,
+    html: layout(
+      storeUrl,
+      'It usually shows up within 5 to 7 working days.',
+      `${heading('Refund on its way')}${para(`We have refunded <strong>${formatINR(amount)}</strong> for order <strong>${esc(order.number)}</strong> to your original payment method. It usually shows up within 5 to 7 working days.`)}`,
+    ),
+    text: `We have refunded ${formatINR(amount)} for order ${order.number} to your original payment method. It usually shows up within 5 to 7 working days.`,
+  };
+}
+
+export interface EmailReturn {
+  type: 'RETURN' | 'EXCHANGE';
+  status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'RECEIVED' | 'COMPLETED';
+  reason: string;
+  items: { name: string; title: string; quantity: number }[];
+  note: string | null;
+}
+
+const returnItemsText = (r: EmailReturn) =>
+  r.items.map((i) => `- ${i.name} (${i.title}) x ${i.quantity}`).join('\n');
+
+export function returnUpdate(storeUrl: string, order: EmailOrder, r: EmailReturn): Rendered {
+  const kind = r.type === 'EXCHANGE' ? 'exchange' : 'return';
+  const copy: Record<EmailReturn['status'], { subject: string; title: string; body: string }> = {
+    REQUESTED: {
+      subject: `We got your ${kind} request for order ${order.number}`,
+      title: 'Request received',
+      body: `Thanks for letting us know. We will look at your ${kind} request and email you within 2 working days.`,
+    },
+    APPROVED: {
+      subject: `Your ${kind} for order ${order.number} is approved`,
+      title: `${r.type === 'EXCHANGE' ? 'Exchange' : 'Return'} approved`,
+      body: `Your ${kind} is approved. Pack the items with their tags on; we will arrange a pickup or tell you where to send them.`,
+    },
+    REJECTED: {
+      subject: `About your ${kind} request for order ${order.number}`,
+      title: 'Request declined',
+      body: `We are sorry, we cannot accept this ${kind}.`,
+    },
+    RECEIVED: {
+      subject: `We received your ${kind} for order ${order.number}`,
+      title: 'Items received',
+      body:
+        r.type === 'EXCHANGE'
+          ? 'Your items reached us. We will send the replacement shortly.'
+          : 'Your items reached us. We will check them and process your refund.',
+    },
+    COMPLETED: {
+      subject: `Your ${kind} for order ${order.number} is complete`,
+      title: `${r.type === 'EXCHANGE' ? 'Exchange' : 'Return'} complete`,
+      body:
+        r.type === 'EXCHANGE'
+          ? 'Your exchange is complete.'
+          : 'Your return is complete. If a refund is due, it is on its way to your original payment method.',
+    },
+  };
+  const c = copy[r.status];
+  return {
+    subject: c.subject,
+    html: layout(
+      storeUrl,
+      c.body,
+      `${heading(c.title)}${para(`Order <strong>${esc(order.number)}</strong>`)}${para(esc(c.body))}${r.note ? para(esc(r.note)) : ''}${para(r.items.map((i) => `${esc(i.name)} (${esc(i.title)}) × ${i.quantity}`).join('<br>'))}${button(trackLink(storeUrl, order.number), 'View your order')}`,
+    ),
+    text: `${c.body}\n${r.note ? `\n${r.note}\n` : ''}\n${returnItemsText(r)}\n\n${trackLink(storeUrl, order.number)}`,
+  };
+}
+
+export function returnRequestedAlert(
+  storeUrl: string,
+  order: EmailOrder,
+  r: EmailReturn,
+): Rendered {
+  const kind = r.type === 'EXCHANGE' ? 'Exchange' : 'Return';
+  return {
+    subject: `${kind} requested for order ${order.number}`,
+    html: layout(
+      storeUrl,
+      r.reason,
+      `${heading(`${kind} requested`)}${para(`${esc(order.shippingAddress.name)} asked for a ${kind.toLowerCase()} on order <strong>${esc(order.number)}</strong>.`)}${para(r.items.map((i) => `${esc(i.name)} (${esc(i.title)}) × ${i.quantity}`).join('<br>'))}
+<pre style="white-space:pre-wrap;font-size:13px;background:#f4f4f4;padding:12px">${esc(r.reason)}</pre>${button(`${storeUrl}/admin/returns`, 'Open returns')}`,
+    ),
+    text: `${kind} requested for order ${order.number} by ${order.shippingAddress.name}.\n\n${returnItemsText(r)}\n\nReason: ${r.reason}\n\n${storeUrl}/admin/returns`,
   };
 }
