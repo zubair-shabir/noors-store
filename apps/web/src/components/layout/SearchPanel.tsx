@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { Search, X } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { formatINR, type ProductSummaryDto } from '@noors/shared';
@@ -61,14 +61,14 @@ export function SearchPanel() {
     >
       {open && (
         <div className="fixed inset-0 z-[80]">
-          <motion.div
+          <m.div
             className="absolute inset-0 bg-black/40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={close}
           />
-          <motion.div
+          <m.div
             role="dialog"
             aria-modal="true"
             aria-label="Search"
@@ -135,7 +135,7 @@ export function SearchPanel() {
                 )}
               </ul>
             )}
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>

@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { easeInOutQuart } from '@/lib/motion';
@@ -38,7 +38,7 @@ export function Drawer({ open, onClose, side, title, children, footer }: DrawerP
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[80]">
-          <motion.div
+          <m.div
             className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -46,7 +46,7 @@ export function Drawer({ open, onClose, side, title, children, footer }: DrawerP
             transition={{ duration: 0.4 }}
             onClick={onClose}
           />
-          <motion.div
+          <m.div
             ref={panelRef}
             role="dialog"
             aria-modal="true"
@@ -74,7 +74,7 @@ export function Drawer({ open, onClose, side, title, children, footer }: DrawerP
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6">{children}</div>
             {footer && <div className="border-t border-line px-6 py-5">{footer}</div>}
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>

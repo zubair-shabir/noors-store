@@ -1,5 +1,5 @@
+import Link from 'next/link';
 import type { FaqItem } from '@/components/home/Faq';
-import { contactEmail } from '@/lib/site';
 
 // Copy from the reference site.
 
@@ -13,18 +13,40 @@ export const storesLines = [
   'feel the drip.',
 ];
 
-const writeToUs = (
-  <>
-    Write to{' '}
-    <a href={`mailto:${contactEmail}`} className="text-foreground underline underline-offset-2">
-      {contactEmail}
-    </a>{' '}
-    and we will sort it out within 24 hours.
-  </>
+const link = (href: string, label: string) => (
+  <Link href={href} className="text-foreground underline underline-offset-2">
+    {label}
+  </Link>
 );
 
 export const faqs: FaqItem[] = [
-  { question: 'How long does delivery take?', answer: writeToUs },
-  { question: 'Can I return or exchange an item?', answer: writeToUs },
-  { question: 'What if I receive a damaged or incorrect item?', answer: writeToUs },
+  {
+    question: 'How long does delivery take?',
+    answer: (
+      <>
+        About 3 days within Jammu and Kashmir and about 5 working days elsewhere in India. Checkout
+        shows an estimate for your pincode. See our {link('/shipping', 'shipping policy')}.
+      </>
+    ),
+  },
+  {
+    question: 'Can I return or exchange an item?',
+    answer: (
+      <>
+        Yes. Ask from your order page within the return window, with the item unworn and its tags
+        on, and swap it for another size or get a refund. See our{' '}
+        {link('/returns', 'returns policy')}.
+      </>
+    ),
+  },
+  {
+    question: 'What if I receive a damaged or incorrect item?',
+    answer: (
+      <>
+        Write to us within 48 hours of delivery with your order number and a photo, and we will
+        replace it or refund you in full. {link('/contact', 'Contact us')} or read our{' '}
+        {link('/faq', 'FAQ')}.
+      </>
+    ),
+  },
 ];

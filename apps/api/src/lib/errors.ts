@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '../generated/prisma/client.js';
@@ -32,12 +33,15 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     }
   }
   if (err instanceof HttpError) {
+    if (err.status >= 500) Sentry.captureException(err);
     res.status(err.status).json({
       error: { code: err.code, message: err.message, ...(err.issues && { issues: err.issues }) },
     });
     return;
   }
   logger.error({ err }, 'Unhandled error');
+  // A no-op unless SENTRY_DSN is set (see server.ts).
+  Sentry.captureException(err);
   res.status(500).json({ error: { code: 'internal_error', message: 'Something went wrong' } });
 };
 

@@ -7,6 +7,7 @@ import { SearchPanel } from '@/components/layout/SearchPanel';
 import { ShopSync } from '@/components/layout/ShopSync';
 import { CursorFollower } from '@/components/motion/CursorFollower';
 import { IntroLoader } from '@/components/motion/IntroLoader';
+import { MotionProvider } from '@/components/motion/MotionProvider';
 import { SmoothScroll } from '@/components/motion/SmoothScroll';
 import { getBanners, getCategories, orFallback } from '@/lib/store-api';
 import { navLinksFor } from '@/lib/site';
@@ -20,7 +21,7 @@ export default async function StoreLayout({ children }: LayoutProps<'/'>) {
   const navLinks = navLinksFor(categories);
 
   return (
-    <>
+    <MotionProvider>
       <IntroLoader />
       <SmoothScroll />
       <AnnouncementBar
@@ -36,6 +37,6 @@ export default async function StoreLayout({ children }: LayoutProps<'/'>) {
       <CartDrawer />
       <SearchPanel />
       <CursorFollower />
-    </>
+    </MotionProvider>
   );
 }

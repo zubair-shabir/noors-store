@@ -19,7 +19,10 @@ const envSchema = z
           .map((o) => o.trim())
           .filter(Boolean),
       ),
-    /** cloudinary://key:secret@cloud_name. When unset, uploads are saved to UPLOADS_DIR. */
+    /**
+     * cloudinary://key:secret@cloud_name. When unset, uploads are saved to UPLOADS_DIR, which
+     * only suits development: a hosted container's disk is wiped on every deploy.
+     */
     CLOUDINARY_URL: optional,
     UPLOADS_DIR: z.string().default('uploads'),
     /** Razorpay API keys (test keys start rzp_test_). Without them, development uses a stand-in. */
@@ -58,6 +61,18 @@ const envSchema = z
     SHIPROCKET_WEBHOOK_TOKEN: optional,
     /** Long random string that encrypts secrets kept in the database (two-factor keys). */
     APP_SECRET: optional,
+    /** The storefront's address and the shared secret for its /api/revalidate route; with both
+     * set, dashboard catalogue edits refresh the store at once instead of within a minute. */
+    WEB_URL: optional,
+    REVALIDATE_SECRET: optional,
+    /** Sentry project DSN; when set, server errors are reported there. */
+    SENTRY_DSN: optional,
+    /**
+     * How many proxies sit in front of the API, so rate limits see the shopper's address
+     * rather than a proxy's. 2 when the shop's /api calls pass through Vercel and then
+     * Railway's edge; 1 when only Railway's edge is in front.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;
@@ -70,6 +85,7 @@ const envSchema = z
       'SHIPROCKET_PASSWORD',
       'SHIPROCKET_WEBHOOK_TOKEN',
       'APP_SECRET',
+      'CLOUDINARY_URL',
     ] as const) {
       if (!env[key])
         ctx.addIssue({ code: 'custom', path: [key], message: 'Required in production' });

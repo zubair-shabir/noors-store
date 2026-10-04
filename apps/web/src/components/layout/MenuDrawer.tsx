@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Drawer } from '@/components/ui/Drawer';
 import { companyLinks, type NavLink } from '@/lib/site';
 import { easeOutExpo } from '@/lib/motion';
@@ -16,7 +16,7 @@ export function MenuDrawer({ navLinks }: { navLinks: NavLink[] }) {
       <nav aria-label="Main">
         <ul className="space-y-1">
           {navLinks.map((link, i) => (
-            <motion.li
+            <m.li
               key={link.href}
               initial={{ opacity: 0, x: -24 }}
               animate={{ opacity: 1, x: 0 }}
@@ -29,12 +29,12 @@ export function MenuDrawer({ navLinks }: { navLinks: NavLink[] }) {
               >
                 {link.label}
               </Link>
-            </motion.li>
+            </m.li>
           ))}
         </ul>
         <ul className="mt-10 space-y-3 border-t border-line pt-8">
           {companyLinks.map((link, i) => (
-            <motion.li
+            <m.li
               key={link.href}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -47,7 +47,7 @@ export function MenuDrawer({ navLinks }: { navLinks: NavLink[] }) {
               >
                 {link.label}
               </Link>
-            </motion.li>
+            </m.li>
           ))}
         </ul>
       </nav>

@@ -33,5 +33,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     { url: url('/about'), priority: 0.4 },
     { url: url('/contact'), priority: 0.3 },
+    { url: url('/faq'), priority: 0.4 },
+    ...['/shipping', '/returns', '/privacy', '/terms'].map((path) => ({
+      url: url(path),
+      changeFrequency: 'yearly' as const,
+      priority: 0.2,
+    })),
   ];
 }

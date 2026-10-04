@@ -9,6 +9,8 @@ Ecommerce web app for Noor's, a Kashmir-based clothing brand: storefront, admin 
 | `apps/web`           | Next.js (App Router) storefront and `/admin` dashboard |
 | `apps/api`           | Express API, Prisma ORM, PostgreSQL                    |
 | `packages/shared`    | Types and Zod validation shared by web and API         |
+| `apps/e2e`           | Playwright tests of the buying journey                 |
+| `docs/GO_LIVE.md`    | Step-by-step guide to hosting and launching the shop   |
 | `docker-compose.yml` | PostgreSQL 16 and Redis 7 for local development        |
 
 ## Getting started
@@ -30,10 +32,20 @@ Check the API: <http://localhost:4000/api/v1/health>
 ## Storefront
 
 Every store page reads the catalogue from the API (`API_URL`). Responses are cached for 60
-seconds, so dashboard edits show up in the store within a minute. "Latest Drip"
+seconds. With `WEB_URL` and `REVALIDATE_SECRET` set in the API (and the same secret in the
+web app), dashboard catalogue edits refresh the store at once; otherwise within a minute. "Latest Drip"
 (`/shop/latest`) is every active product, newest first, not a category. If the API is
 down, the layout and home page still render without their product sections; other store
 pages show the error page.
+
+Signed-in shoppers can save products to a wishlist (the heart on product cards and pages) and
+see it on their account page. The shipping, returns, privacy, terms and FAQ pages quote the
+shipping charges, cash on delivery and return window from Settings, so they stay in step with
+the shop. The contact form emails the store email from Settings (or `ORDER_ALERT_EMAIL`).
+
+Storefront animations use motion's slim `m` components inside `LazyMotion`
+(`components/motion/MotionProvider.tsx`), and browser code imports only zod-free modules from
+`@noors/shared` (constants live in `limits.ts`), which keeps the store's JavaScript small.
 
 ## Checkout and payments
 
@@ -127,6 +139,12 @@ whether each is connected.
 Product photos upload to Cloudinary when `CLOUDINARY_URL` is set in `apps/api/.env`; without it
 they are saved to `apps/api/uploads` and served at `/uploads`.
 
+## Going live
+
+Hosting is Vercel for the shop and Railway for the API and database. `docs/GO_LIVE.md` walks
+through every account, setting, DNS record and launch-day check; `apps/api/Dockerfile` and
+`railway.json` build the API, and `apps/web/vercel.json` builds the shop.
+
 ## Scripts
 
 | Command                                      | Does                                                                       |
@@ -135,6 +153,7 @@ they are saved to `apps/api/uploads` and served at `/uploads`.
 | `pnpm build`                                 | Build every package                                                        |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | Checks, also run in CI                                                     |
 | `pnpm format`                                | Format with Prettier                                                       |
+| `pnpm e2e`                                   | End-to-end tests (run `pnpm build` first; also run in CI)                  |
 | `pnpm db:up` / `pnpm db:down`                | Start or stop Postgres and Redis                                           |
 | `pnpm db:migrate`                            | Create and apply a migration after editing `apps/api/prisma/schema.prisma` |
 | `pnpm db:seed`                               | Load sample categories, products and variants (safe to re-run)             |

@@ -1,0 +1,25 @@
+# Keep the Docker build context small and free of secrets. The API image is built from the
+# repository root (see apps/api/Dockerfile).
+**/node_modules
+**/.turbo
+**/.next
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/*.log
+.git
+.github
+.vercel
+.DS_Store
+
+# Secrets and local data
+**/.env
+**/.env.*
+!**/.env.example
+apps/api/uploads
+apps/api/src/generated
+
+# Not needed to build the API
+apps/web/src
+apps/web/public
+docs

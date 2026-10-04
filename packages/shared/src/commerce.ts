@@ -3,11 +3,9 @@ import type { Paise } from './money.js';
 import { phoneSchema, pincodeSchema } from './schemas.js';
 import type { PaymentMethod, ReturnSummaryDto } from './operations.js';
 import type { ShipmentDto, TimelineEntryDto } from './shipping.js';
+import { MAX_LINE_QUANTITY } from './limits.js';
 
 // ─── Cart ───────────────────────────────────────────────────────────────────
-
-/** Most of one variant a shopper can put in the cart. */
-export const MAX_LINE_QUANTITY = 10;
 
 const quantity = z.coerce.number().int().min(1).max(MAX_LINE_QUANTITY);
 

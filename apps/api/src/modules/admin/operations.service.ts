@@ -361,7 +361,8 @@ export class ReportService {
     const { lowStockThreshold } = await loadSetting(this.prisma, 'inventory');
 
     const daily = await this.prisma.$queryRaw<{ day: string; sales: bigint; orders: bigint }[]>`
-      SELECT to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day,
+      -- created_at is a UTC timestamp without a zone: mark it UTC, then convert to Indian time.
+      SELECT to_char(o.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day,
              sum(o.total) AS sales, count(*) AS orders
       FROM orders o
       WHERE ${SOLD} AND o.created_at >= ${start}

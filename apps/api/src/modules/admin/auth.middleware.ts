@@ -53,6 +53,10 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export function sameOriginOnly(allowedOrigins: string[]): RequestHandler {
   return (req, _res, next) => {
     if (SAFE_METHODS.has(req.method)) return next();
+    // Browsers that send Fetch Metadata say outright when a request comes from another site.
+    if (req.get('sec-fetch-site') === 'cross-site') {
+      throw new HttpError(403, 'Cross-site request blocked', 'forbidden');
+    }
     const origin = req.get('origin');
     if (!origin) return next();
     const own = `${req.protocol}://${req.get('host')}`;

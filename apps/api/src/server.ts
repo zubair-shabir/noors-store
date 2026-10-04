@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { createApp } from './app.js';
 import { loadEnv } from './env.js';
 import { LogEmailSender, ResendEmailSender } from './lib/email.js';
@@ -9,6 +10,8 @@ import { CloudinaryImageStore } from './modules/admin/uploads.service.js';
 import { createServices } from './services.js';
 
 const env = loadEnv();
+// Error reporting (optional). Express errors are sent from the error handler (lib/errors.ts).
+if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV });
 const prisma = createPrisma(env.DATABASE_URL);
 
 const paymentGateway =
@@ -50,6 +53,7 @@ const app = createApp({
   imageStore: env.CLOUDINARY_URL ? new CloudinaryImageStore(env.CLOUDINARY_URL) : undefined,
   uploadsDir: env.UPLOADS_DIR,
   secureCookies: env.NODE_ENV === 'production',
+  trustProxyHops: env.TRUST_PROXY_HOPS,
   services,
 });
 if (paymentGateway.mode === 'mock') {
@@ -67,7 +71,10 @@ function every(ms: number, name: string, job: () => Promise<number>) {
   const run = () =>
     job()
       .then((n) => n && logger.info(`${name}: ${n}`))
-      .catch((err: unknown) => logger.error({ err }, `${name} failed`));
+      .catch((err: unknown) => {
+        logger.error({ err }, `${name} failed`);
+        Sentry.captureException(err);
+      });
   void run();
   return setInterval(run, ms);
 }
@@ -88,6 +95,7 @@ async function shutdown(signal: string) {
   timers.forEach(clearInterval);
   server.close();
   await prisma.$disconnect();
+  await Sentry.close(2000);
   process.exit(0);
 }
 

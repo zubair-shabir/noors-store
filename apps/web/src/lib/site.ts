@@ -28,6 +28,15 @@ export const companyLinks: NavLink[] = [
   { href: '/contact', label: 'Contact Us' },
   { href: '/track', label: 'Track Order' },
   { href: '/account', label: 'Your Account' },
+  { href: '/faq', label: 'FAQ' },
+];
+
+/** Shipping, returns, privacy and terms: footer row and the policy pages' own links. */
+export const policyLinks: NavLink[] = [
+  { href: '/shipping', label: 'Shipping' },
+  { href: '/returns', label: 'Returns' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/terms', label: 'Terms' },
 ];
 
 /** Placeholder brand photography (About page, fallbacks). Replaced when real photos arrive. */

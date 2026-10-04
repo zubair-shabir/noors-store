@@ -9,6 +9,7 @@ import { useShop } from '@/lib/cart-store';
 import { errorMessage } from '@/lib/shop-api';
 import { productHref } from '@/lib/site';
 import { useUi } from '@/lib/ui-store';
+import { WishlistButton } from './WishlistButton';
 
 interface ProductCardProps {
   product: ProductSummaryDto;
@@ -21,7 +22,7 @@ const action =
 /**
  * Product tile from the reference site: the image cross-fades to the second photo on hover
  * (with the "View" cursor), then name, price with struck compare-at price, a size picker,
- * Add to cart and Buy now. A rule under the card draws in from the left on hover.
+ * Add to cart and Buy now. A heart in the photo's top right corner saves it to the wishlist. A rule under the card draws in from the left on hover.
  */
 export function ProductCard({ product, priority = false }: ProductCardProps) {
   const options = product.quickAdd;
@@ -85,6 +86,8 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           </span>
         )}
       </Link>
+      {/* Outside the link: a button inside an <a> is invalid and would follow the link. */}
+      <WishlistButton productId={product.id} slug={product.slug} name={product.name} />
       <h3 className="mt-4 text-base tracking-[0.01em] uppercase sm:text-lg">
         <Link href={href}>{product.name}</Link>
       </h3>

@@ -26,6 +26,7 @@ import type { CustomerAuthService } from './customer-auth.service.js';
 import { loadSetting } from '../settings/settings.service.js';
 import type { OrderService } from './orders.service.js';
 import type { ReturnService } from './returns.service.js';
+import { wishlistRoutes } from './wishlist.routes.js';
 
 export const CART_COOKIE = 'noors_cart';
 export const CUSTOMER_COOKIE = 'noors_customer';
@@ -111,6 +112,7 @@ export function storeRouter(opts: StoreRouterOptions): Router {
     if (!req.customer) throw new HttpError(401, 'Please sign in', 'unauthorized');
     next();
   };
+  router.use(wishlistRoutes({ prisma, requireCustomer }));
 
   // ─── Cart ─────────────────────────────────────────────────────────────────
 

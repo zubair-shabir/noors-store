@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import { m, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useRef } from 'react';
 
 interface StoresParallaxProps {
@@ -25,23 +25,23 @@ export function StoresParallax({ lines, images }: StoresParallaxProps) {
 
   return (
     <section ref={ref} className="relative overflow-hidden py-40 sm:py-56">
-      <motion.div
+      <m.div
         className="absolute top-[18%] -left-[4%] w-[38vw] max-w-[360px] shadow-[0_30px_60px_-15px_rgb(0_0_0/0.35)] sm:w-[24vw]"
         style={reduce ? { rotate: -8 } : { y: leftY, rotate: leftRotate }}
       >
         <div className="relative aspect-[4/5]">
           <Image src={images[0]} alt="" fill sizes="360px" className="object-cover" />
         </div>
-      </motion.div>
-      <motion.div
+      </m.div>
+      <m.div
         className="absolute top-[22%] -right-[3%] w-[38vw] max-w-[360px] shadow-[0_30px_60px_-15px_rgb(0_0_0/0.35)] sm:w-[24vw]"
         style={reduce ? { rotate: 8 } : { y: rightY, rotate: rightRotate }}
       >
         <div className="relative aspect-[4/5]">
           <Image src={images[1]} alt="" fill sizes="360px" className="object-cover" />
         </div>
-      </motion.div>
-      <motion.h2
+      </m.div>
+      <m.h2
         className="relative mx-auto max-w-2xl px-6 text-center font-display text-[clamp(2rem,4.6vw,3.4rem)] leading-[1.32] text-statement uppercase"
         style={reduce ? undefined : { y: textY }}
       >
@@ -50,7 +50,7 @@ export function StoresParallax({ lines, images }: StoresParallaxProps) {
             {line}
           </span>
         ))}
-      </motion.h2>
+      </m.h2>
     </section>
   );
 }

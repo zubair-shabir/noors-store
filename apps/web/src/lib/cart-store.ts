@@ -1,6 +1,6 @@
 'use client';
 
-import type { CartDto, CustomerDto } from '@noors/shared';
+import type { CartDto, CustomerDto, WishlistIdsDto } from '@noors/shared';
 import { create } from 'zustand';
 import { shopFetch } from './shop-api';
 
@@ -20,7 +20,20 @@ interface ShopState {
   applyCoupon: (code: string) => Promise<void>;
   removeCoupon: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Ids of the signed-in shopper's saved products; empty when signed out or not loaded yet. */
+  wishlist: string[];
+  /** Whose saved ids `wishlist` holds (null until they arrive), so they are fetched once per shopper. */
+  wishlistOwner: string | null;
+  /** Fetches the saved ids when a different shopper signs in, and clears them on sign-out. */
+  syncWishlist: (customer: CustomerDto | null) => Promise<void>;
+  /** Saves or unsaves a product straight away, then confirms with the server (rolls back on error). */
+  toggleWishlist: (productId: string) => Promise<void>;
 }
+
+/** Saves and unsaves still waiting on the server; their answers are applied by the last one. */
+let wishlistPending = 0;
+/** The shopper whose saved ids are being fetched. */
+let wishlistFetching: string | null = null;
 
 /** Bags saved in the browser before carts moved to the server (Step 5). */
 const LEGACY_KEY = 'noors-cart';
@@ -53,9 +66,13 @@ export const useShop = create<ShopState>()((set, get) => ({
       shopFetch<{ customer: CustomerDto | null }>('/me'),
     ]);
     set({ cart, customer: me.customer, loaded: true });
+    await get().syncWishlist(me.customer);
   },
   setCart: (cart) => set({ cart }),
-  setCustomer: (customer) => set({ customer }),
+  setCustomer: (customer) => {
+    set({ customer });
+    void get().syncWishlist(customer);
+  },
   add: async (variantId, quantity = 1) => {
     const cart = await shopFetch<CartDto>('/cart/items', {
       method: 'POST',
@@ -98,9 +115,52 @@ export const useShop = create<ShopState>()((set, get) => ({
   },
   signOut: async () => {
     await shopFetch('/auth/logout', { method: 'POST' });
-    set({ customer: null });
+    set({ customer: null, wishlist: [], wishlistOwner: null });
     // Signed out, the shopper is a guest again with an empty bag.
     set({ cart: await shopFetch<CartDto>('/cart') });
+  },
+  wishlist: [],
+  wishlistOwner: null,
+  syncWishlist: async (customer) => {
+    if (!customer) {
+      if (get().wishlistOwner) set({ wishlist: [], wishlistOwner: null });
+      return;
+    }
+    if (get().wishlistOwner === customer.id || wishlistFetching === customer.id) return;
+    if (get().wishlistOwner) set({ wishlist: [], wishlistOwner: null });
+    wishlistFetching = customer.id;
+    try {
+      const { productIds } = await shopFetch<WishlistIdsDto>('/me/wishlist/ids');
+      if (get().customer?.id === customer.id) {
+        set({ wishlist: productIds, wishlistOwner: customer.id });
+      }
+    } catch {
+      // Hearts stay empty; the next load tries again.
+    } finally {
+      if (wishlistFetching === customer.id) wishlistFetching = null;
+    }
+  },
+  toggleWishlist: async (productId) => {
+    const saved = get().wishlist.includes(productId);
+    const apply = (save: boolean) => {
+      const rest = get().wishlist.filter((id) => id !== productId);
+      set({ wishlist: save ? [productId, ...rest] : rest });
+    };
+    apply(!saved);
+    wishlistPending += 1;
+    try {
+      const { productIds } = await shopFetch<WishlistIdsDto>(
+        `/me/wishlist/${encodeURIComponent(productId)}`,
+        { method: saved ? 'DELETE' : 'PUT' },
+      );
+      // With other taps in flight, this answer is already stale; the last one wins.
+      if (wishlistPending === 1) set({ wishlist: productIds });
+    } catch (err) {
+      apply(saved);
+      throw err;
+    } finally {
+      wishlistPending -= 1;
+    }
   },
 }));
 

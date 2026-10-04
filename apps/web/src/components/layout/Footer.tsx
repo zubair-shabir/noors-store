@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
-import { contactEmail, type NavLink } from '@/lib/site';
+import { contactEmail, policyLinks, type NavLink } from '@/lib/site';
 
 const columnsFor = (navLinks: NavLink[]) => [
   { title: 'Clothing', links: navLinks },
@@ -11,8 +11,7 @@ const columnsFor = (navLinks: NavLink[]) => [
       { href: '/contact', label: 'Contact Us' },
       { href: '/track', label: 'Track Order' },
       { href: '/account', label: 'Account' },
-      { href: '/terms', label: 'Terms' },
-      { href: '/#faq', label: 'FAQ' },
+      { href: '/faq', label: 'FAQ' },
     ],
   },
   {
@@ -56,6 +55,24 @@ export function Footer({ navLinks }: { navLinks: NavLink[] }) {
           ))}
         </div>
       </div>
+      <nav
+        aria-label="Policies"
+        className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 border-t border-white/15 px-6 py-6 md:px-10"
+      >
+        <h3 className="text-xs font-semibold tracking-[0.06em] uppercase">Policies</h3>
+        <ul className="flex flex-wrap gap-x-5 gap-y-2">
+          {policyLinks.map((link) => (
+            <li key={link.href}>
+              <Link
+                href={link.href}
+                className="relative text-[11px] tracking-[0.06em] uppercase after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-white after:transition-transform after:duration-500 hover:after:scale-x-100"
+              >
+                {link.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <p className="pb-8 text-center text-[10px] tracking-[0.06em] text-white/80 uppercase">
         © {new Date().getFullYear()} Noor&apos;s Private Limited, all rights reserved.
       </p>
